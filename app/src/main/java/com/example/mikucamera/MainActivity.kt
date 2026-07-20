@@ -10,6 +10,7 @@ import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.location.Address
 import android.location.Geocoder
 import android.net.Uri
 import android.os.Build
@@ -49,6 +50,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.mikucamera.camera.PhotoComposer
 import com.example.mikucamera.data.PresetStore
+import com.example.mikucamera.location.LocationFormatter
 import com.example.mikucamera.location.LocationProvider
 import com.example.mikucamera.model.WatermarkPreset
 import com.example.mikucamera.ui.FocusExposureView
@@ -82,9 +84,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchCameraButton: ImageButton
     private lateinit var captureButton: ImageButton
     private lateinit var selectWatermarkButton: TextView
+    private lateinit var locationStatusView: TextView
     private lateinit var recentPhotoView: ImageView
     private lateinit var timeSwitch: SwitchMaterial
     private lateinit var locationSwitch: SwitchMaterial
+    private lateinit var streetSwitch: SwitchMaterial
     private lateinit var outlineSeekBar: android.widget.SeekBar
     private lateinit var focusExposure: FocusExposureView
     private val store by lazy { PresetStore(this) }
@@ -97,6 +101,9 @@ class MainActivity : AppCompatActivity() {
     private var flashMode = ImageCapture.FLASH_MODE_OFF
     private var physicalRotationDegrees = 0
     private var currentLocation = ""
+    /** Last reverse-geocode result; reformatted when 门牌 toggles without re-fetch. */
+    private var lastAddress: Address? = null
+    private var lastLatLonFallback: String? = null
     private var editing = false
     private var editingExistingPreset = false
     private var editingOriginalName = ""
@@ -136,9 +143,11 @@ class MainActivity : AppCompatActivity() {
         if (grants[Manifest.permission.CAMERA] == true) startCamera() else toast("需要相机权限才能拍照")
     }
     private val locationPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        if (grants.values.any { it }) requestLocation() else {
-            locationSwitch.isChecked = false
-            toast("未授予定位权限，将不会记录地点")
+        // GPS is independent of the watermark "地点" display switch.
+        if (grants.values.any { it }) {
+            requestLocation(silent = true)
+        } else {
+            toast("未授予定位权限，地点水印可能无法显示地址")
         }
     }
     private val pngPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -163,6 +172,8 @@ class MainActivity : AppCompatActivity() {
         bindActions()
         enterCameraMode()
         loadLatestPhoto()
+        // Warm up GPS as soon as the camera opens so location is ready when needed.
+        startLocationWarmup()
         if (!hasCameraPermission()) cameraPermission.launch(requiredCameraPermissions()) else startCamera()
     }
 
@@ -193,9 +204,13 @@ class MainActivity : AppCompatActivity() {
         switchCameraButton = findViewById(R.id.switchCameraButton)
         captureButton = findViewById(R.id.captureButton)
         selectWatermarkButton = findViewById(R.id.selectWatermarkButton)
+        locationStatusView = findViewById(R.id.locationStatusView)
+        // Keep marquee running in the middle slot (never steals width from side buttons).
+        locationStatusView.isSelected = true
         recentPhotoView = findViewById(R.id.recentPhotoView)
         timeSwitch = findViewById(R.id.timeSwitch)
         locationSwitch = findViewById(R.id.locationSwitch)
+        streetSwitch = findViewById(R.id.streetSwitch)
         outlineSeekBar = findViewById(R.id.outlineSeekBar)
         createFocusExposureView()
 
@@ -320,6 +335,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         hideStatusBar()
         orientationListener.enable()
+        // Keep GPS warm whenever the camera UI is active.
+        startLocationWarmup()
     }
 
     override fun onPause() {
@@ -355,6 +372,7 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<MaterialButton>(R.id.cancelEditButton).setOnClickListener { cancelEditor() }
         findViewById<MaterialButton>(R.id.saveWatermarkButton).setOnClickListener { saveCurrentPreset() }
+        findViewById<MaterialButton>(R.id.deleteWatermarkButton).setOnClickListener { deleteCurrentPreset() }
         outlineSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, value: Int, fromUser: Boolean) {
                 overlay.setOutlinePx(value.toFloat())
@@ -363,13 +381,33 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) = Unit
         })
         timeSwitch.setOnCheckedChangeListener { _, checked -> overlay.setShowTime(checked) }
+        // "地点" = whether to draw location on the watermark, NOT GPS on/off.
         locationSwitch.setOnCheckedChangeListener { _, checked ->
             overlay.setShowLocation(checked)
-            if (checked) {
-                if (hasLocationPermission()) requestLocation() else locationPermission.launch(
-                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                )
-            }
+            updateStreetSwitchVisibility(checked)
+            if (checked) applyCachedLocationLabel()
+        }
+        streetSwitch.setOnCheckedChangeListener { _, checked ->
+            overlay.setIncludeStreet(checked)
+            applyCachedLocationLabel()
+        }
+    }
+
+    private fun updateStreetSwitchVisibility(locationDisplayOn: Boolean) {
+        streetSwitch.visibility = if (locationDisplayOn) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * GPS always runs with the camera session. The watermark "地点" switch only
+     * controls whether the resolved address is drawn on the photo.
+     */
+    private fun startLocationWarmup() {
+        if (hasLocationPermission()) {
+            requestLocation(silent = true)
+        } else {
+            locationPermission.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
         }
     }
 
@@ -553,13 +591,15 @@ class MainActivity : AppCompatActivity() {
         flashButton.isEnabled = hasFlash
         flashButton.alpha = if (hasFlash) 1f else 0.4f
         flashIcon.text = "⚡"
-        // Badge glued to bolt bottom-right: ❌ = off, A = auto, hidden = on.
-        fun placeBadge() {
+        // Badge is layout-tied to the ⚡ glyph (not the 44dp circle). Nudge so it touches.
+        fun placeBadge(touchDxDp: Float, touchDyDp: Float, sizeSp: Float) {
+            flashBadge.translationX = touchDxDp * density
+            flashBadge.translationY = touchDyDp * density
+            flashBadge.textSize = sizeSp
             val lp = (flashBadge.layoutParams as FrameLayout.LayoutParams).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
-                // Negative margins pull the badge onto the ⚡ glyph.
-                marginEnd = (-2 * density).roundToInt()
-                bottomMargin = (-1 * density).roundToInt()
+                marginEnd = 0
+                bottomMargin = 0
             }
             flashBadge.layoutParams = lp
         }
@@ -568,8 +608,8 @@ class MainActivity : AppCompatActivity() {
                 flashBadge.visibility = View.VISIBLE
                 flashBadge.text = "❌"
                 flashBadge.setTextColor(Color.parseColor("#FF5252"))
-                flashBadge.textSize = 9f
-                placeBadge()
+                // Sit on the lower-right tip of the bolt.
+                placeBadge(touchDxDp = 1f, touchDyDp = 0f, sizeSp = 10f)
             }
             flashMode == ImageCapture.FLASH_MODE_ON -> {
                 flashBadge.visibility = View.GONE
@@ -578,8 +618,7 @@ class MainActivity : AppCompatActivity() {
                 flashBadge.visibility = View.VISIBLE
                 flashBadge.text = "A"
                 flashBadge.setTextColor(Color.WHITE)
-                flashBadge.textSize = 9f
-                placeBadge()
+                placeBadge(touchDxDp = 2f, touchDyDp = 1f, sizeSp = 10f)
             }
         }
         if (!hasFlash) {
@@ -627,9 +666,11 @@ class MainActivity : AppCompatActivity() {
             findViewById(R.id.uploadButton),
             timeSwitch,
             locationSwitch,
+            streetSwitch,
             outlineSeekBar,
             findViewById(R.id.cancelEditButton),
-            findViewById(R.id.saveWatermarkButton)
+            findViewById(R.id.saveWatermarkButton),
+            findViewById(R.id.deleteWatermarkButton)
         ).forEach { it.rotation = 0f }
     }
 
@@ -715,7 +756,7 @@ class MainActivity : AppCompatActivity() {
             val selectionArgs: Array<String>?
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 selection = "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?"
-                selectionArgs = arrayOf("${Environment.DIRECTORY_PICTURES}/水印相机/%")
+                selectionArgs = arrayOf("${Environment.DIRECTORY_PICTURES}/miku camera/%")
             } else {
                 selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
                 selectionArgs = arrayOf("watermark_%")
@@ -838,6 +879,8 @@ class MainActivity : AppCompatActivity() {
             val generated = overlay.setPreset(preset, bitmap)
             enterCameraMode()
             if (generated) persistCurrentPresetIfSaved()
+            // GPS is already warm; only refresh on-screen text if 地点 is displayed.
+            if (preset.showLocation) applyCachedLocationLabel()
         }
     }
 
@@ -856,8 +899,24 @@ class MainActivity : AppCompatActivity() {
             overlay.setPreset(preset, bitmap)
             overlay.setEditingEnabled(true)
             timeSwitch.isChecked = preset.showTime
+            // Avoid listener side-effects fighting preset load.
+            locationSwitch.setOnCheckedChangeListener(null)
+            streetSwitch.setOnCheckedChangeListener(null)
             locationSwitch.isChecked = preset.showLocation
+            streetSwitch.isChecked = preset.includeStreet
+            updateStreetSwitchVisibility(preset.showLocation)
+            locationSwitch.setOnCheckedChangeListener { _, checked ->
+                // Display-only: do not start/stop GPS here.
+                overlay.setShowLocation(checked)
+                updateStreetSwitchVisibility(checked)
+                if (checked) applyCachedLocationLabel()
+            }
+            streetSwitch.setOnCheckedChangeListener { _, checked ->
+                overlay.setIncludeStreet(checked)
+                applyCachedLocationLabel()
+            }
             outlineSeekBar.progress = preset.outlinePx.toInt()
+            if (preset.showLocation) applyCachedLocationLabel()
         }
         root.post { layoutViewfinder() }
     }
@@ -873,6 +932,8 @@ class MainActivity : AppCompatActivity() {
         overlay.setEditingEnabled(false)
         hideStatusBar()
         root.post { layoutViewfinder() }
+        startLocationWarmup()
+        if (overlay.currentPreset().showLocation) applyCachedLocationLabel()
     }
 
     private fun cancelEditor() {
@@ -917,6 +978,44 @@ class MainActivity : AppCompatActivity() {
             }.show()
     }
 
+    private fun deleteCurrentPreset() {
+        val preset = overlay.currentPreset()
+        val name = when {
+            editingExistingPreset && editingOriginalName.isNotBlank() -> editingOriginalName
+            preset.name.isNotBlank() -> preset.name
+            else -> "该水印"
+        }
+        if (!editingExistingPreset && store.loadAll().none { it.id == preset.id }) {
+            // Brand-new draft: nothing in store — just discard.
+            AlertDialog.Builder(this)
+                .setTitle("删除水印")
+                .setMessage("当前水印尚未保存，确定放弃编辑吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除") { _, _ ->
+                    clearActiveWatermark()
+                    toast("已放弃")
+                }
+                .show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("删除水印")
+            .setMessage("确定删除「$name」吗？此操作不可恢复。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除") { _, _ ->
+                store.delete(preset.id)
+                clearActiveWatermark()
+                toast("水印已删除")
+            }
+            .show()
+    }
+
+    private fun clearActiveWatermark() {
+        presetBeforeEdit = null
+        overlay.setPreset(WatermarkPreset(), null)
+        enterCameraMode()
+    }
+
     private fun loadBitmap(uriString: String?, onLoaded: (android.graphics.Bitmap?) -> Unit) {
         if (uriString.isNullOrBlank()) {
             onLoaded(null)
@@ -930,27 +1029,68 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestLocation() {
+    /** Background GPS + reverse geocode. Always silent; independent of 地点 display switch. */
+    private fun requestLocation(silent: Boolean = true) {
+        setLocationStatusText("正在定位中")
         locationProvider.request { location ->
             if (location == null) {
-                toast("暂时无法获取当前位置")
+                setLocationStatusText("定位失败")
+                if (!silent) toast("暂时无法获取当前位置")
                 return@request
             }
             cameraExecutor.execute {
-                val label = runCatching {
+                val address = runCatching {
                     if (Geocoder.isPresent()) {
                         @Suppress("DEPRECATION")
-                        Geocoder(this, Locale.getDefault()).getFromLocation(location.latitude, location.longitude, 1)
-                            ?.firstOrNull()?.getAddressLine(0)
+                        Geocoder(this, Locale.getDefault())
+                            .getFromLocation(location.latitude, location.longitude, 1)
+                            ?.firstOrNull()
                     } else null
-                }.getOrNull()?.takeIf { it.isNotBlank() }
-                    ?: "%.5f, %.5f".format(Locale.US, location.latitude, location.longitude)
+                }.getOrNull()
+                val fallback = "%.5f, %.5f".format(Locale.US, location.latitude, location.longitude)
                 runOnUiThread {
-                    currentLocation = label
-                    overlay.setLocationText(label)
+                    lastAddress = address
+                    lastLatLonFallback = fallback
+                    applyCachedLocationLabel()
                 }
             }
         }
+    }
+
+    /**
+     * Rebuild location text from cache.
+     * - Top bar: always 市+区+门牌/POI (not controlled by watermark 门牌 switch).
+     * - Watermark: 市+区, plus POI only if the active preset has 门牌 on.
+     */
+    private fun applyCachedLocationLabel() {
+        val statusLabel = formatLocationLabel(includePoi = true)
+        if (!statusLabel.isNullOrBlank()) {
+            currentLocation = statusLabel
+            setLocationStatusText(statusLabel)
+        }
+        if (overlay.currentPreset().showLocation) {
+            val watermarkLabel = formatLocationLabel(
+                includePoi = overlay.currentPreset().includeStreet
+            )
+            if (!watermarkLabel.isNullOrBlank()) {
+                overlay.setLocationText(watermarkLabel)
+            }
+        }
+    }
+
+    private fun formatLocationLabel(includePoi: Boolean): String? {
+        return lastAddress?.let { LocationFormatter.format(it, includePoi) }
+            ?.takeIf { it.isNotBlank() }
+            ?: lastLatLonFallback
+            ?: currentLocation.takeIf { it.isNotBlank() }
+    }
+
+    /** Middle slot only (weight=1); long text marquees horizontally, never covers side buttons. */
+    private fun setLocationStatusText(text: String) {
+        locationStatusView.text = text
+        // Re-select so marquee restarts after text change.
+        locationStatusView.isSelected = false
+        locationStatusView.isSelected = true
     }
 
     private fun hasCameraPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED

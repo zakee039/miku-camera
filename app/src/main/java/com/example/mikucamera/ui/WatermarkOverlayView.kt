@@ -156,6 +156,12 @@ class WatermarkOverlayView @JvmOverloads constructor(
         onChanged?.invoke()
     }
 
+    fun setIncludeStreet(include: Boolean) {
+        preset.includeStreet = include
+        invalidate()
+        onChanged?.invoke()
+    }
+
     fun setLocationText(value: String) {
         locationText = value
         invalidate()

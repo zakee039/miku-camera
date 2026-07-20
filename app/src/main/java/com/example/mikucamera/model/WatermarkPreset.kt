@@ -18,6 +18,8 @@ data class WatermarkPreset(
     var timeScale: Float = 1f,
     var timeRotation: Float = 0f,
     var showLocation: Boolean = false,
+    /** When true, append street / house number after 市+区. Default off (市+区 only). */
+    var includeStreet: Boolean = false,
     var locationX: Float = 0.5f,
     var locationY: Float = 0.83f,
     var locationScale: Float = 0.8f,
@@ -76,6 +78,7 @@ data class WatermarkPreset(
         put("timeScale", timeScale.toDouble())
         put("timeRotation", timeRotation.toDouble())
         put("showLocation", showLocation)
+        put("includeStreet", includeStreet)
         put("locationX", locationX.toDouble())
         put("locationY", locationY.toDouble())
         put("locationScale", locationScale.toDouble())
@@ -101,6 +104,7 @@ data class WatermarkPreset(
             timeScale = json.optDouble("timeScale", 1.0).toFloat(),
             timeRotation = json.optDouble("timeRotation", 0.0).toFloat(),
             showLocation = json.optBoolean("showLocation", false),
+            includeStreet = json.optBoolean("includeStreet", false),
             locationX = json.optDouble("locationX", 0.5).toFloat(),
             locationY = json.optDouble("locationY", 0.83).toFloat(),
             locationScale = json.optDouble("locationScale", 0.8).toFloat(),

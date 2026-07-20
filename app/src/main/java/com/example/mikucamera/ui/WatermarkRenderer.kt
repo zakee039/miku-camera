@@ -3,15 +3,20 @@ package com.example.mikucamera.ui
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.BlurMaskFilter
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import com.example.mikucamera.model.WatermarkPreset
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 object WatermarkRenderer {
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val smoothOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-        color = Color.WHITE
+    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
     }
 
     fun draw(
@@ -69,20 +74,39 @@ object WatermarkRenderer {
 
         val outline = preset.outlinePx * width / previewWidth.coerceAtLeast(1).toFloat()
         if (outline > 0.25f) {
-            // Extract the PNG alpha mask and blur only its outside edge. This
-            // produces an anti-aliased outline instead of the jagged 24-copy
-            // dilation previously used here.
-            val alphaMask = bitmap.extractAlpha()
-            smoothOutlinePaint.maskFilter = BlurMaskFilter(
-                outline.coerceAtMost(48f),
-                BlurMaskFilter.Blur.OUTER
-            )
-            canvas.drawBitmap(alphaMask, null, rect, smoothOutlinePaint)
-            smoothOutlinePaint.maskFilter = null
-            alphaMask.recycle()
+            drawPngOutline(canvas, bitmap, rect, outline)
         }
         canvas.drawBitmap(bitmap, null, rect, bitmapPaint)
         canvas.restore()
+    }
+
+    /**
+     * Reliable white outline for arbitrary PNG alpha: stamp a solid silhouette
+     * around the shape in a ring of offsets. Works on hardware and software
+     * canvases (unlike BlurMaskFilter, which often fails on hardware layers).
+     */
+    private fun drawPngOutline(canvas: Canvas, bitmap: Bitmap, rect: RectF, outlinePx: Float) {
+        val radius = outlinePx.coerceIn(0.5f, 64f)
+        val steps = max(12, (radius * 2.5f).roundToInt().coerceAtMost(36))
+        for (i in 0 until steps) {
+            val angle = (Math.PI * 2.0 * i) / steps
+            val dx = (cos(angle) * radius).toFloat()
+            val dy = (sin(angle) * radius).toFloat()
+            canvas.save()
+            canvas.translate(dx, dy)
+            canvas.drawBitmap(bitmap, null, rect, outlinePaint)
+            canvas.restore()
+        }
+        // Extra cardinal stamps for denser coverage on thin strokes.
+        val cardinal = floatArrayOf(0f, radius, 0f, -radius, radius, 0f, -radius, 0f)
+        var i = 0
+        while (i < cardinal.size) {
+            canvas.save()
+            canvas.translate(cardinal[i], cardinal[i + 1])
+            canvas.drawBitmap(bitmap, null, rect, outlinePaint)
+            canvas.restore()
+            i += 2
+        }
     }
 
     private fun drawText(

@@ -58,7 +58,6 @@ class WatermarkOverlayView @JvmOverloads constructor(
 
     fun setPreset(value: WatermarkPreset, loadedBitmap: Bitmap?): Boolean {
         preset = value.copyForEditing()
-        setLayerType(if (preset.outlinePx > 0f) LAYER_TYPE_SOFTWARE else LAYER_TYPE_NONE, null)
         var generatedLayout = false
         if (preset.portraitLayout == null && preset.landscapeLayout == null) {
             preset.portraitLayout = preset.activeLayout()
@@ -139,7 +138,6 @@ class WatermarkOverlayView @JvmOverloads constructor(
 
     fun setOutlinePx(value: Float) {
         preset.outlinePx = value
-        setLayerType(if (value > 0f) LAYER_TYPE_SOFTWARE else LAYER_TYPE_NONE, null)
         invalidate()
         onChanged?.invoke()
     }
@@ -176,6 +174,9 @@ class WatermarkOverlayView @JvmOverloads constructor(
         timeText = timeFormat.format(Date()),
         locationText = locationText,
         previewWidth = logicalWidth(),
+        previewHeight = logicalHeight(),
+        viewfinderWidth = width.coerceAtLeast(1),
+        viewfinderHeight = height.coerceAtLeast(1),
         orientationDegrees = captureOrientationDegrees
     )
 
@@ -205,21 +206,31 @@ class WatermarkOverlayView @JvmOverloads constructor(
             time,
             locationText
         )
-        if (editingEnabled) drawSelection(canvas, time, logicalWidth, logicalHeight)
+        // Selection ring in full editor, or while the user is dragging on camera.
+        if (editingEnabled || selected != null) {
+            drawSelection(canvas, time, logicalWidth, logicalHeight)
+        }
         canvas.restore()
     }
 
+    /**
+     * Watermark elements can be dragged/pinched in both camera and editor modes.
+     * Misses return false so the preview under this view can handle focus/exposure.
+     */
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!editingEnabled) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                parent.requestDisallowInterceptTouchEvent(true)
                 val point = toLogicalPoint(event.x, event.y)
                 selected = hitTest(point.first, point.second)
+                if (selected == null) {
+                    invalidate()
+                    return false
+                }
+                parent.requestDisallowInterceptTouchEvent(true)
                 lastX = point.first
                 lastY = point.second
                 invalidate()
-                return selected != null
+                return true
             }
             MotionEvent.ACTION_POINTER_DOWN -> if (event.pointerCount >= 2 && selected != null) {
                 pinchStartDistance = pointerDistance(event).coerceAtLeast(1f)
@@ -229,7 +240,7 @@ class WatermarkOverlayView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                val element = selected ?: return false
+                if (selected == null) return false
                 if (event.pointerCount >= 2) {
                     val ratio = pointerDistance(event) / pinchStartDistance.coerceAtLeast(1f)
                     setSelectedScale((pinchStartScale * ratio).coerceIn(0.15f, 3f))
@@ -253,7 +264,7 @@ class WatermarkOverlayView @JvmOverloads constructor(
                 }
                 invalidate()
                 onChanged?.invoke()
-                return element.let { true }
+                return true
             }
             MotionEvent.ACTION_POINTER_UP -> {
                 if (event.pointerCount == 2) {
@@ -266,7 +277,14 @@ class WatermarkOverlayView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 parent.requestDisallowInterceptTouchEvent(false)
-                return selected != null
+                val handled = selected != null
+                // Camera mode: drop selection chrome after the gesture so the
+                // viewfinder stays clean; editor keeps the selection.
+                if (!editingEnabled) {
+                    selected = null
+                    invalidate()
+                }
+                return handled
             }
         }
         return selected != null

@@ -204,7 +204,12 @@ data class WatermarkRenderSpec(
     val bitmap: android.graphics.Bitmap?,
     val timeText: String,
     val locationText: String,
+    /** Logical canvas size used for watermark layout (swaps in landscape). */
     val previewWidth: Int,
+    val previewHeight: Int = previewWidth,
+    /** Physical PreviewView size (always the on-screen 9:16 frame). */
+    val viewfinderWidth: Int = previewWidth,
+    val viewfinderHeight: Int = previewHeight,
     /** Physical device orientation, rounded to the nearest right angle. */
     val orientationDegrees: Int = 0
 )

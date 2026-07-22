@@ -37,11 +37,22 @@ object PhotoComposer {
         if (framed !== exifOriented) exifOriented.recycle()
 
         // Rotate into the physical posture (portrait stays, landscape rolls 90/270).
-        val oriented = rotateToPhysicalOrientation(framed, spec.orientationDegrees)
+        val oriented = rotateToPhysicalOrientation(
+            framed,
+            spec.orientationDegrees,
+            spec.isFrontFacing
+        )
         if (oriented !== framed) framed.recycle()
 
-        val output = oriented.copy(Bitmap.Config.ARGB_8888, true)
-        if (output !== oriented) oriented.recycle()
+        // PreviewView mirrors the front camera, while ImageCapture stores an
+        // unmirrored frame. Mirror only the camera image so the saved photo
+        // matches the preview; the watermark is drawn afterwards and remains
+        // readable and in its configured direction.
+        val previewMatched = if (spec.isFrontFacing) mirrorHorizontally(oriented) else oriented
+        if (previewMatched !== oriented) oriented.recycle()
+
+        val output = previewMatched.copy(Bitmap.Config.ARGB_8888, true)
+        if (output !== previewMatched) previewMatched.recycle()
         val canvas = Canvas(output)
         WatermarkRenderer.draw(
             canvas = canvas,
@@ -59,7 +70,7 @@ object PhotoComposer {
             put(MediaStore.Images.Media.DISPLAY_NAME, "watermark_$stamp.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/miku camera")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/waifu camera")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }
@@ -103,9 +114,23 @@ object PhotoComposer {
      * how to roll that buffer so gallery orientation matches how the phone
      * was held.
      */
-    private fun rotateToPhysicalOrientation(bitmap: Bitmap, orientationDegrees: Int): Bitmap {
+    private fun rotateToPhysicalOrientation(
+        bitmap: Bitmap,
+        orientationDegrees: Int,
+        isFrontFacing: Boolean
+    ): Bitmap {
         val normalized = ((orientationDegrees % 360) + 360) % 360
-        val degrees = when (normalized) {
+        // With the fixed ROTATION_0 capture pipeline, front and back sensors
+        // have opposite landscape baselines. Using the back-camera direction
+        // for a front-camera frame rotates the saved photo by an extra 180°.
+        val lensAdjusted = if (isFrontFacing) {
+            when (normalized) {
+                90 -> 270
+                270 -> 90
+                else -> normalized
+            }
+        } else normalized
+        val degrees = when (lensAdjusted) {
             90 -> 90f
             180 -> 180f
             270 -> 270f
@@ -113,6 +138,11 @@ object PhotoComposer {
         }
         if (degrees == 0f) return bitmap
         val matrix = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    private fun mirrorHorizontally(bitmap: Bitmap): Bitmap {
+        val matrix = Matrix().apply { preScale(-1f, 1f) }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 

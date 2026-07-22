@@ -23,7 +23,25 @@ class PresetStore(context: Context) {
         write(presets)
     }
 
-    fun delete(id: String) = write(loadAll().filterNot { it.id == id })
+    fun loadSelected(): WatermarkPreset? {
+        val selectedId = preferences.getString(KEY_SELECTED_PRESET_ID, null) ?: return null
+        return loadAll().firstOrNull { it.id == selectedId }.also { preset ->
+            if (preset == null) clearSelection()
+        }
+    }
+
+    fun select(id: String) {
+        preferences.edit().putString(KEY_SELECTED_PRESET_ID, id).apply()
+    }
+
+    fun clearSelection() {
+        preferences.edit().remove(KEY_SELECTED_PRESET_ID).apply()
+    }
+
+    fun delete(id: String) {
+        write(loadAll().filterNot { it.id == id })
+        if (preferences.getString(KEY_SELECTED_PRESET_ID, null) == id) clearSelection()
+    }
 
     private fun write(presets: List<WatermarkPreset>) {
         val array = JSONArray()
@@ -33,5 +51,6 @@ class PresetStore(context: Context) {
 
     private companion object {
         const val KEY_PRESETS = "presets"
+        const val KEY_SELECTED_PRESET_ID = "selected_preset_id"
     }
 }

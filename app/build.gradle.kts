@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.mikucamera"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 5
+        versionName = "1.2.2"
     }
 
     buildTypes {
@@ -30,6 +30,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+android.applicationVariants.all {
+    val outputName = "waifu-camera-${versionName}.apk"
+    outputs.all {
+        (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = outputName
+    }
 }
 
 dependencies {

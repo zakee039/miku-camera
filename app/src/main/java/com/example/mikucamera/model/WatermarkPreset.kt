@@ -215,5 +215,7 @@ data class WatermarkRenderSpec(
     val viewfinderWidth: Int = previewWidth,
     val viewfinderHeight: Int = previewHeight,
     /** Physical device orientation, rounded to the nearest right angle. */
-    val orientationDegrees: Int = 0
+    val orientationDegrees: Int = 0,
+    /** Front camera sensors use the opposite landscape rotation baseline. */
+    val isFrontFacing: Boolean = false
 )

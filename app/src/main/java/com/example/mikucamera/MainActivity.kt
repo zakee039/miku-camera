@@ -171,6 +171,7 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         bindActions()
         enterCameraMode()
+        restoreLastSelectedPreset()
         loadLatestPhoto()
         // Warm up GPS as soon as the camera opens so location is ready when needed.
         startLocationWarmup()
@@ -700,7 +701,11 @@ class MainActivity : AppCompatActivity() {
         captureButton.isEnabled = false
         playShutterApertureAnimation()
         val file = File.createTempFile("capture_", ".jpg", cacheDir)
-        val spec = overlay.renderSpec()
+        // Snapshot the active lens with the render state. Camera callbacks run
+        // asynchronously, so lensFacing may change before composition starts.
+        val spec = overlay.renderSpec().copy(
+            isFrontFacing = lensFacing == CameraSelector.LENS_FACING_FRONT
+        )
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
@@ -755,8 +760,12 @@ class MainActivity : AppCompatActivity() {
             val selection: String?
             val selectionArgs: Array<String>?
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                selection = "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?"
-                selectionArgs = arrayOf("${Environment.DIRECTORY_PICTURES}/miku camera/%")
+                selection = "(${MediaStore.Images.Media.RELATIVE_PATH} LIKE ? OR " +
+                    "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?)"
+                selectionArgs = arrayOf(
+                    "${Environment.DIRECTORY_PICTURES}/waifu camera/%",
+                    "${Environment.DIRECTORY_PICTURES}/miku camera/%"
+                )
             } else {
                 selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
                 selectionArgs = arrayOf("watermark_%")
@@ -875,11 +884,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectPreset(preset: WatermarkPreset) {
+        store.select(preset.id)
         loadBitmap(preset.imageUri) { bitmap ->
             val generated = overlay.setPreset(preset, bitmap)
             enterCameraMode()
             if (generated) persistCurrentPresetIfSaved()
             // GPS is already warm; only refresh on-screen text if 地点 is displayed.
+            if (preset.showLocation) applyCachedLocationLabel()
+        }
+    }
+
+    private fun restoreLastSelectedPreset() {
+        val preset = store.loadSelected() ?: return
+        loadBitmap(preset.imageUri) { bitmap ->
+            val generated = overlay.setPreset(preset, bitmap)
+            if (generated) persistCurrentPresetIfSaved()
             if (preset.showLocation) applyCachedLocationLabel()
         }
     }
@@ -955,6 +974,7 @@ class MainActivity : AppCompatActivity() {
             // than opening the new-watermark naming flow.
             preset.name = editingOriginalName.ifBlank { preset.name }
             store.save(preset)
+            store.select(preset.id)
             toast("水印已更新")
             enterCameraMode()
             return
@@ -972,6 +992,7 @@ class MainActivity : AppCompatActivity() {
                     "水印 " + SimpleDateFormat("MMdd-HHmm", Locale.getDefault()).format(Date())
                 }
                 store.save(preset)
+                store.select(preset.id)
                 toast("水印已保存")
                 presetBeforeEdit = null
                 enterCameraMode()
@@ -1012,6 +1033,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun clearActiveWatermark() {
         presetBeforeEdit = null
+        store.clearSelection()
         overlay.setPreset(WatermarkPreset(), null)
         enterCameraMode()
     }

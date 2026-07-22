@@ -16,5 +16,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MikuCamera"
+rootProject.name = "WaifuCamera"
 include(":app")

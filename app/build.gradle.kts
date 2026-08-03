@@ -11,13 +11,28 @@ android {
         applicationId = "com.example.mikucamera"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.2.2"
+        versionCode = 7
+        versionName = "1.3.1"
+    }
+
+    // Keep the signing key stable so locally installed updates can replace
+    // previous APKs. The keystore is local-only and ignored by Git.
+    signingConfigs {
+        create("stableLocal") {
+            storeFile = file("miku-camera-signing.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("stableLocal")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stableLocal")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -33,7 +48,7 @@ android {
 }
 
 android.applicationVariants.all {
-    val outputName = "waifu-camera-${versionName}.apk"
+    val outputName = "miku-camera-${versionName}.apk"
     outputs.all {
         (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = outputName
     }

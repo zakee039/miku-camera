@@ -30,7 +30,7 @@ class WatermarkOverlayView @JvmOverloads constructor(
         strokeWidth = resources.displayMetrics.density * 1.5f
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 8f), 0f)
     }
-    private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    private val timeFormat = SimpleDateFormat("yyyy年M月d日H时", Locale.CHINA)
     private var preset = WatermarkPreset()
     private var bitmap: Bitmap? = null
     private var locationText = ""
@@ -86,6 +86,11 @@ class WatermarkOverlayView @JvmOverloads constructor(
         return preset.copyForEditing()
     }
 
+    /** Updates the authoritative preset name without triggering layout autosave. */
+    fun setPresetName(name: String) {
+        preset.name = name
+    }
+
     fun setDisplayOrientation(landscape: Boolean): Boolean {
         return setPhysicalRotation(if (landscape) 90 else 0)
     }
@@ -118,18 +123,22 @@ class WatermarkOverlayView @JvmOverloads constructor(
 
     fun setUploadedImage(uri: String, loadedBitmap: Bitmap) {
         preset.imageUri = uri
-        preset.imageX = 0.5f
-        preset.imageY = 0.5f
-        preset.imageWidthFraction = 0.5f
-        preset.imageRotation = 0f
-        val defaultLayout = preset.activeLayout()
+        val current = preset.activeLayout().copy(
+            imageX = 0.5f,
+            imageY = 0.5f,
+            imageWidthFraction = 0.5f,
+            imageRotation = 0f
+        )
         if (landscapeMode) {
-            preset.landscapeLayout = defaultLayout
-            preset.portraitLayout = defaultLayout.rotateToPortrait(true)
+            preset.landscapeLayout = current
+            val imageInPortrait = current.rotateToPortrait(true)
+            preset.portraitLayout = (preset.portraitLayout ?: imageInPortrait).withImageFrom(imageInPortrait)
         } else {
-            preset.portraitLayout = defaultLayout
-            preset.landscapeLayout = defaultLayout.rotateToLandscape(true)
+            preset.portraitLayout = current
+            val imageInLandscape = current.rotateToLandscape(true)
+            preset.landscapeLayout = (preset.landscapeLayout ?: imageInLandscape).withImageFrom(imageInLandscape)
         }
+        preset.applyLayout(current)
         bitmap = loadedBitmap
         selected = Element.IMAGE
         invalidate()
@@ -250,7 +259,9 @@ class WatermarkOverlayView @JvmOverloads constructor(
                 if (event.pointerCount >= 2) {
                     val ratio = pointerDistance(event) / pinchStartDistance.coerceAtLeast(1f)
                     setSelectedScale((pinchStartScale * ratio).coerceIn(0.15f, 3f))
-                    setSelectedRotation(pinchStartRotation + normalizeAngle(pointerAngle(event) - pinchStartAngle))
+                    if (selected == Element.IMAGE) {
+                        setSelectedRotation(pinchStartRotation + normalizeAngle(pointerAngle(event) - pinchStartAngle))
+                    }
                     val first = toLogicalPoint(event.getX(0), event.getY(0))
                     val second = toLogicalPoint(event.getX(1), event.getY(1))
                     val logicalWidth = logicalWidth().toFloat()
@@ -317,13 +328,14 @@ class WatermarkOverlayView @JvmOverloads constructor(
     private fun localBounds(element: Element, logicalWidth: Int): RectF = when (element) {
         Element.IMAGE -> bitmap?.let { WatermarkRenderer.imageRect(logicalWidth, preset, it) } ?: RectF()
         Element.TIME -> textBounds(timeFormat.format(Date()), preset.timeScale, logicalWidth)
-        Element.LOCATION -> textBounds(locationText, preset.locationScale, logicalWidth)
+        Element.LOCATION -> textBounds(locationText, preset.timeScale, logicalWidth)
     }.apply { inset(-20f, -20f) }
 
     private fun textBounds(text: String, scale: Float, logicalWidth: Int = logicalWidth()): RectF {
         val textWidth = WatermarkRenderer.textWidth(logicalWidth, text, scale)
         val textHeight = WatermarkRenderer.textHeight(logicalWidth, scale)
-        return RectF(-textWidth / 2f, -textHeight / 2f, textWidth / 2f, textHeight / 2f)
+        // Text anchors are the right edge of each line, matching the renderer.
+        return RectF(-textWidth, -textHeight / 2f, 0f, textHeight / 2f)
     }
 
     private fun drawSelection(canvas: Canvas, time: String, logicalWidth: Int, logicalHeight: Int) {
@@ -334,7 +346,7 @@ class WatermarkOverlayView @JvmOverloads constructor(
         val bounds = when (element) {
             Element.IMAGE -> WatermarkRenderer.imageRect(logicalWidth, preset, bitmap!!)
             Element.TIME -> textBounds(time, preset.timeScale, logicalWidth)
-            Element.LOCATION -> textBounds(locationText, preset.locationScale, logicalWidth)
+            Element.LOCATION -> textBounds(locationText, preset.timeScale, logicalWidth)
         }
         val (cx, cy) = centerOf(element)
         canvas.save()
@@ -352,14 +364,13 @@ class WatermarkOverlayView @JvmOverloads constructor(
 
     private fun rotationOf(element: Element): Float = when (element) {
         Element.IMAGE -> preset.imageRotation
-        Element.TIME -> preset.timeRotation
-        Element.LOCATION -> preset.locationRotation
+        Element.TIME, Element.LOCATION -> 0f
     }
 
     private fun selectedScale(): Float = when (selected) {
         Element.IMAGE -> preset.imageWidthFraction
         Element.TIME -> preset.timeScale
-        Element.LOCATION -> preset.locationScale
+        Element.LOCATION -> preset.timeScale
         null -> 1f
     }
 
@@ -368,8 +379,10 @@ class WatermarkOverlayView @JvmOverloads constructor(
     private fun setSelectedScale(value: Float) {
         when (selected) {
             Element.IMAGE -> preset.imageWidthFraction = value.coerceIn(0.05f, 2.5f)
-            Element.TIME -> preset.timeScale = value
-            Element.LOCATION -> preset.locationScale = value
+            Element.TIME, Element.LOCATION -> {
+                preset.timeScale = value
+                preset.locationScale = value
+            }
             null -> Unit
         }
     }
@@ -377,8 +390,7 @@ class WatermarkOverlayView @JvmOverloads constructor(
     private fun setSelectedRotation(value: Float) {
         when (selected) {
             Element.IMAGE -> preset.imageRotation = value
-            Element.TIME -> preset.timeRotation = value
-            Element.LOCATION -> preset.locationRotation = value
+            Element.TIME, Element.LOCATION -> Unit
             null -> Unit
         }
     }
@@ -442,4 +454,11 @@ class WatermarkOverlayView @JvmOverloads constructor(
         removeCallbacks(clockTicker)
         super.onDetachedFromWindow()
     }
+
+    private fun WatermarkLayout.withImageFrom(source: WatermarkLayout): WatermarkLayout = copy(
+        imageX = source.imageX,
+        imageY = source.imageY,
+        imageWidthFraction = source.imageWidthFraction,
+        imageRotation = source.imageRotation
+    )
 }

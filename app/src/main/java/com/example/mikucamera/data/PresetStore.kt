@@ -16,11 +16,11 @@ class PresetStore(context: Context) {
         }
     }.getOrDefault(emptyList())
 
-    fun save(preset: WatermarkPreset) {
+    fun save(preset: WatermarkPreset): Boolean {
         val presets = loadAll().toMutableList()
         val index = presets.indexOfFirst { it.id == preset.id }
         if (index >= 0) presets[index] = preset.copy() else presets.add(preset.copy())
-        write(presets)
+        return write(presets)
     }
 
     fun loadSelected(): WatermarkPreset? {
@@ -43,10 +43,12 @@ class PresetStore(context: Context) {
         if (preferences.getString(KEY_SELECTED_PRESET_ID, null) == id) clearSelection()
     }
 
-    private fun write(presets: List<WatermarkPreset>) {
+    private fun write(presets: List<WatermarkPreset>): Boolean {
         val array = JSONArray()
         presets.forEach { array.put(it.toJson()) }
-        preferences.edit().putString(KEY_PRESETS, array.toString()).apply()
+        // Preset data is small; commit synchronously so the save button can
+        // verify that the name and layout are durable before leaving editor mode.
+        return preferences.edit().putString(KEY_PRESETS, array.toString()).commit()
     }
 
     private companion object {

@@ -13,20 +13,20 @@ data class WatermarkPreset(
     var imageRotation: Float = 0f,
     var outlinePx: Float = 0f,
     var showTime: Boolean = false,
-    var timeX: Float = 0.5f,
-    var timeY: Float = 0.76f,
-    var timeScale: Float = 1f,
+    var timeX: Float = 0.985f,
+    var timeY: Float = 0.94f,
+    var timeScale: Float = 0.75f,
     var timeRotation: Float = 0f,
     var showLocation: Boolean = false,
     /** When true, append street / house number after 市+区. Default off (市+区 only). */
     var includeStreet: Boolean = false,
-    var locationX: Float = 0.5f,
-    var locationY: Float = 0.83f,
-    var locationScale: Float = 0.8f,
+    var locationX: Float = 0.985f,
+    var locationY: Float = 0.97f,
+    var locationScale: Float = 0.75f,
     var locationRotation: Float = 0f,
     var portraitLayout: WatermarkLayout? = null,
     var landscapeLayout: WatermarkLayout? = null,
-    var layoutVersion: Int = 2
+    var layoutVersion: Int = CURRENT_LAYOUT_VERSION
 ) {
     fun copyForEditing() = copy(
         portraitLayout = portraitLayout?.copy(),
@@ -89,6 +89,21 @@ data class WatermarkPreset(
     }
 
     companion object {
+        const val CURRENT_LAYOUT_VERSION = 10
+
+        /** Creates one complete default layout for each device orientation. */
+        fun newDraft(): WatermarkPreset {
+            val preset = WatermarkPreset()
+            val portrait = preset.activeLayout()
+            val landscape = portrait.rotateToLandscape(true).copy(
+                timeY = 0.93f,
+                locationY = 0.98f
+            )
+            preset.portraitLayout = portrait
+            preset.landscapeLayout = landscape
+            return preset
+        }
+
         fun fromJson(json: JSONObject): WatermarkPreset = WatermarkPreset(
             id = json.optString("id", UUID.randomUUID().toString()),
             name = json.optString("name", "未命名水印"),
@@ -99,14 +114,14 @@ data class WatermarkPreset(
             imageRotation = json.optDouble("imageRotation", 0.0).toFloat(),
             outlinePx = json.optDouble("outlinePx", 0.0).toFloat(),
             showTime = json.optBoolean("showTime", false),
-            timeX = json.optDouble("timeX", 0.5).toFloat(),
-            timeY = json.optDouble("timeY", 0.76).toFloat(),
+            timeX = json.optDouble("timeX", 0.985).toFloat(),
+            timeY = json.optDouble("timeY", 0.93).toFloat(),
             timeScale = json.optDouble("timeScale", 1.0).toFloat(),
             timeRotation = json.optDouble("timeRotation", 0.0).toFloat(),
             showLocation = json.optBoolean("showLocation", false),
             includeStreet = json.optBoolean("includeStreet", false),
-            locationX = json.optDouble("locationX", 0.5).toFloat(),
-            locationY = json.optDouble("locationY", 0.83).toFloat(),
+            locationX = json.optDouble("locationX", 0.985).toFloat(),
+            locationY = json.optDouble("locationY", 0.985).toFloat(),
             locationScale = json.optDouble("locationScale", 0.8).toFloat(),
             locationRotation = json.optDouble("locationRotation", 0.0).toFloat(),
             // Version 1 used a screen-coordinate rotation that moved a
@@ -119,7 +134,7 @@ data class WatermarkPreset(
             landscapeLayout = if (json.optInt("layoutVersion", 0) >= 2) {
                 json.optJSONObject("landscapeLayout")?.let(WatermarkLayout::fromJson)
             } else null,
-            layoutVersion = 2
+            layoutVersion = json.optInt("layoutVersion", 2)
         )
     }
 }
@@ -163,10 +178,10 @@ data class WatermarkLayout(
             imageWidthFraction = imageWidthFraction * widthScale,
             timeX = timeX,
             timeY = timeY,
-            timeScale = timeScale * widthScale,
+            timeScale = timeScale,
             locationX = locationX,
             locationY = locationY,
-            locationScale = locationScale * widthScale
+            locationScale = locationScale
         )
     }
 
@@ -178,10 +193,10 @@ data class WatermarkLayout(
             imageWidthFraction = imageWidthFraction * widthScale,
             timeX = timeX,
             timeY = timeY,
-            timeScale = timeScale * widthScale,
+            timeScale = timeScale,
             locationX = locationX,
             locationY = locationY,
-            locationScale = locationScale * widthScale
+            locationScale = locationScale
         )
     }
 

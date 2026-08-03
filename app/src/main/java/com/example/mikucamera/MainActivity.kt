@@ -90,6 +90,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var locationSwitch: SwitchMaterial
     private lateinit var streetSwitch: SwitchMaterial
     private lateinit var outlineSeekBar: android.widget.SeekBar
+    private lateinit var watermarkNameEditText: EditText
     private lateinit var focusExposure: FocusExposureView
     private val store by lazy { PresetStore(this) }
     private val locationProvider by lazy { LocationProvider(this) }
@@ -158,7 +159,11 @@ class MainActivity : AppCompatActivity() {
         cameraExecutor.execute {
             val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
             runOnUiThread {
-                if (bitmap == null) toast("PNG 读取失败") else overlay.setUploadedImage(uri.toString(), bitmap)
+                if (bitmap == null) {
+                    toast("PNG 读取失败")
+                } else {
+                    overlay.setUploadedImage(uri.toString(), bitmap)
+                }
             }
         }
     }
@@ -213,6 +218,7 @@ class MainActivity : AppCompatActivity() {
         locationSwitch = findViewById(R.id.locationSwitch)
         streetSwitch = findViewById(R.id.streetSwitch)
         outlineSeekBar = findViewById(R.id.outlineSeekBar)
+        watermarkNameEditText = findViewById(R.id.watermarkNameEditText)
         createFocusExposureView()
 
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
@@ -285,7 +291,7 @@ class MainActivity : AppCompatActivity() {
         editorControls.measure(widthSpec, unspec)
         val bottomH = maxOf(
             captureControls.measuredHeight,
-            editorControls.measuredHeight.coerceAtMost((140 * density).roundToInt()),
+            editorControls.measuredHeight.coerceAtMost((200 * density).roundToInt()),
             (88 * density).roundToInt()
         )
         lockedBottomHeight = bottomH
@@ -686,11 +692,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun persistCurrentPresetIfSaved() {
         val current = overlay.currentPreset()
-        if (editingExistingPreset) {
-            current.name = editingOriginalName.ifBlank { current.name }
-            store.save(current)
-            return
-        }
         if (store.loadAll().any { it.id == current.id }) {
             store.save(current)
         }
@@ -760,12 +761,8 @@ class MainActivity : AppCompatActivity() {
             val selection: String?
             val selectionArgs: Array<String>?
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                selection = "(${MediaStore.Images.Media.RELATIVE_PATH} LIKE ? OR " +
-                    "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?)"
-                selectionArgs = arrayOf(
-                    "${Environment.DIRECTORY_PICTURES}/waifu camera/%",
-                    "${Environment.DIRECTORY_PICTURES}/miku camera/%"
-                )
+                selection = "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?"
+                selectionArgs = arrayOf("${Environment.DIRECTORY_PICTURES}/miku camera/%")
             } else {
                 selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
                 selectionArgs = arrayOf("watermark_%")
@@ -818,7 +815,7 @@ class MainActivity : AppCompatActivity() {
         })
         val newButton = MaterialButton(this).apply {
             text = "+ 新建水印"
-            setOnClickListener { dialog.dismiss(); startEditor(WatermarkPreset()) }
+            setOnClickListener { dialog.dismiss(); startEditor(WatermarkPreset.newDraft()) }
         }
         container.addView(newButton)
         store.loadAll().forEach { preset ->
@@ -908,6 +905,8 @@ class MainActivity : AppCompatActivity() {
         editingExistingPreset = store.loadAll().any { it.id == preset.id }
         editingOriginalName = preset.name
         presetBeforeEdit = overlay.currentPreset()
+        watermarkNameEditText.setText(preset.name)
+        watermarkNameEditText.setSelection(watermarkNameEditText.text.length)
         // INVISIBLE keeps top-bar height so the 3:4 FOV never jumps.
         cameraControls.visibility = View.INVISIBLE
         captureControls.visibility = View.GONE
@@ -968,40 +967,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveCurrentPreset() {
+        val current = overlay.currentPreset()
+        val name = watermarkNameEditText.text.toString().trim().ifBlank {
+            current.name.ifBlank {
+                "水印 " + SimpleDateFormat("MMdd-HHmm", Locale.getDefault()).format(Date())
+            }
+        }
+        // The overlay is the authoritative editing state. Update its name
+        // before saving so later location/layout callbacks cannot overwrite
+        // the stored preset with the previous blank name.
+        overlay.setPresetName(name)
         val preset = overlay.currentPreset()
-        if (editingExistingPreset) {
-            // Editing an existing item updates the same stored id/name rather
-            // than opening the new-watermark naming flow.
-            preset.name = editingOriginalName.ifBlank { preset.name }
-            store.save(preset)
-            store.select(preset.id)
-            toast("水印已更新")
-            enterCameraMode()
+        if (!store.save(preset)) {
+            toast("水印保存失败")
             return
         }
-        val input = EditText(this).apply {
-            hint = "例如：工作水印"
-            setSingleLine(true)
+        store.select(preset.id)
+        val saved = store.loadAll().firstOrNull { it.id == preset.id }
+        if (saved?.name != name) {
+            toast("水印名称保存失败")
+            return
         }
-        AlertDialog.Builder(this)
-            .setTitle("保存水印")
-            .setView(input)
-            .setNegativeButton("取消", null)
-            .setPositiveButton("保存") { _, _ ->
-                preset.name = input.text.toString().trim().ifBlank {
-                    "水印 " + SimpleDateFormat("MMdd-HHmm", Locale.getDefault()).format(Date())
-                }
-                store.save(preset)
-                store.select(preset.id)
-                toast("水印已保存")
-                presetBeforeEdit = null
-                enterCameraMode()
-            }.show()
+        toast(if (editingExistingPreset) "水印已更新" else "水印已保存")
+        presetBeforeEdit = null
+        enterCameraMode()
     }
 
     private fun deleteCurrentPreset() {
         val preset = overlay.currentPreset()
+        val editedName = watermarkNameEditText.text.toString().trim()
         val name = when {
+            editingExistingPreset && editedName.isNotBlank() -> editedName
             editingExistingPreset && editingOriginalName.isNotBlank() -> editingOriginalName
             preset.name.isNotBlank() -> preset.name
             else -> "该水印"

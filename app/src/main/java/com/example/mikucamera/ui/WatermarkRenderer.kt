@@ -31,7 +31,7 @@ object WatermarkRenderer {
     ) {
         if (bitmap != null) drawBitmap(canvas, width, height, preset, bitmap, previewWidth)
         if (preset.showTime) {
-            drawText(canvas, width, height, timeText, preset.timeX, preset.timeY, preset.timeScale, preset.timeRotation)
+            drawText(canvas, width, height, timeText, preset.timeX, preset.timeY, preset.timeScale)
         }
         if (preset.showLocation && locationText.isNotBlank()) {
             drawText(
@@ -41,8 +41,7 @@ object WatermarkRenderer {
                 locationText,
                 preset.locationX,
                 preset.locationY,
-                preset.locationScale,
-                preset.locationRotation
+                preset.timeScale
             )
         }
     }
@@ -57,7 +56,9 @@ object WatermarkRenderer {
         return textPaint(width, scale, Paint.Style.FILL).measureText(text)
     }
 
-    fun textHeight(width: Int, scale: Float): Float = width * 0.052f * scale
+    // Two points smaller than the previous default while keeping both lines
+    // on the same baseline scale.
+    fun textHeight(width: Int, scale: Float): Float = width * 0.044f * scale
 
     private fun drawBitmap(
         canvas: Canvas,
@@ -116,18 +117,16 @@ object WatermarkRenderer {
         text: String,
         centerX: Float,
         centerY: Float,
-        scale: Float,
-        rotation: Float
+        scale: Float
     ) {
         canvas.save()
         canvas.translate(centerX * width, centerY * height)
-        canvas.rotate(rotation)
         val stroke = textPaint(width, scale, Paint.Style.STROKE).apply {
             color = Color.argb(210, 0, 0, 0)
             strokeWidth = (width * 0.004f).coerceAtLeast(2f)
         }
         val fill = textPaint(width, scale, Paint.Style.FILL).apply { color = Color.WHITE }
-        val x = -fill.measureText(text) / 2f
+        val x = -fill.measureText(text)
         val y = -(fill.ascent() + fill.descent()) / 2f
         canvas.drawText(text, x, y, stroke)
         canvas.drawText(text, x, y, fill)
@@ -135,7 +134,7 @@ object WatermarkRenderer {
     }
 
     private fun textPaint(width: Int, scale: Float, style: Paint.Style) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = width * 0.052f * scale
+        textSize = width * 0.044f * scale
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
         textAlign = Paint.Align.LEFT
         this.style = style

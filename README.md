@@ -1,10 +1,10 @@
-# waifu camera
+# miku camera
 
 原生 Android / Kotlin 水印相机。打开应用直接进入拍照模式。
 
-**软件名称：`waifu camera`**
+**软件名称：`miku camera`**
 
-**当前版本：`1.2.2`**（`versionCode` 5 · Git tag `1.2.2`）
+**当前版本：`1.3.1`**（`versionCode` 7 · Git tag `1.3.1`）
 
 版本号改哪里请看 → [VERSION_GUIDE.md](./VERSION_GUIDE.md)
 
@@ -18,9 +18,9 @@
 - **所有处理均在本地完成**（取景、定位解析、水印合成、相册保存）。
 - **不会上传**照片、水印素材、位置信息或任何个人数据到服务器。
 - **无账号、无统计埋点、无第三方数据上报**（系统定位仅用于本机反查地址文案，结果只显示在本地水印/状态栏）。
-- 照片保存在本机相册：`Pictures/waifu camera`。
+- 照片保存在本机相册：`Pictures/miku camera`。
 
-## 1.2.2 主要能力
+## 1.3.1 主要能力
 
 - **所见即所得**：CameraX `ViewPort` 与 3:4 取景对齐。
 - **布局**：屏幕居中 9:16 内容区 + 上下黑边；取景 3:4；顶栏 🌸 / 闪光灯在取景外。
@@ -39,16 +39,18 @@
 
 ```bash
 ./gradlew assembleDebug
-# APK: app/build/outputs/apk/debug/waifu-camera-1.2.2.apk
+# APK: app/build/outputs/apk/debug/miku-camera-1.3.1.apk
 ```
+
+本地构建使用项目内忽略的 `app/miku-camera-signing.keystore` 固定签名，确保后续更新可以覆盖当前安装包。该文件是私密签名材料，不要删除、泄露或提交到 Git。
 
 ## 版本与发布
 
 | 项 | 值 |
 |----|-----|
-| versionName | 1.2.2 |
-| versionCode | 5 |
-| Git tag | 1.2.2 |
+| versionName | 1.3.1 |
+| versionCode | 7 |
+| Git tag | 1.3.1 |
 
 发版步骤见 [VERSION_GUIDE.md](./VERSION_GUIDE.md)。
 

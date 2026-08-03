@@ -70,7 +70,7 @@ object PhotoComposer {
             put(MediaStore.Images.Media.DISPLAY_NAME, "watermark_$stamp.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/waifu camera")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/miku camera")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }

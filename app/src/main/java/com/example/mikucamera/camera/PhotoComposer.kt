@@ -22,37 +22,9 @@ import kotlin.math.roundToInt
 
 object PhotoComposer {
     fun composeAndSave(context: Context, source: File, spec: WatermarkRenderSpec): Uri {
-        val decoded = BitmapFactory.decodeFile(source.absolutePath)
-            ?: error("无法读取相机照片")
-        val exifOriented = orient(decoded, source)
-        if (exifOriented !== decoded) decoded.recycle()
-
-        // Capture uses the same ViewPort / ROTATION_0 as the preview, so the
-        // buffer is already (or nearly) the on-screen 3:4 FOV. Crop to the
-        // physical viewfinder aspect before any landscape rotation so the
-        // saved frame matches what the user saw.
-        val viewfinderAspect = spec.viewfinderWidth.toFloat() /
-            spec.viewfinderHeight.coerceAtLeast(1).toFloat()
-        val framed = cropToAspect(exifOriented, viewfinderAspect)
-        if (framed !== exifOriented) exifOriented.recycle()
-
-        // Rotate into the physical posture (portrait stays, landscape rolls 90/270).
-        val oriented = rotateToPhysicalOrientation(
-            framed,
-            spec.orientationDegrees,
-            spec.isFrontFacing
-        )
-        if (oriented !== framed) framed.recycle()
-
-        // PreviewView mirrors the front camera, while ImageCapture stores an
-        // unmirrored frame. Mirror only the camera image so the saved photo
-        // matches the preview; the watermark is drawn afterwards and remains
-        // readable and in its configured direction.
-        val previewMatched = if (spec.isFrontFacing) mirrorHorizontally(oriented) else oriented
-        if (previewMatched !== oriented) oriented.recycle()
-
-        val output = previewMatched.copy(Bitmap.Config.ARGB_8888, true)
-        if (output !== previewMatched) previewMatched.recycle()
+        val clean = prepareCleanBitmap(source, spec)
+        val output = clean.copy(Bitmap.Config.ARGB_8888, true)
+        if (output !== clean) clean.recycle()
         val canvas = Canvas(output)
         WatermarkRenderer.draw(
             canvas = canvas,
@@ -65,10 +37,66 @@ object PhotoComposer {
             previewWidth = spec.previewWidth
         )
 
-        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        try {
+            return saveBitmapToGallery(context, output, "watermark")
+        } finally {
+            output.recycle()
+        }
+    }
+
+    /**
+     * Produces the clean photo that matches the CameraX preview. No PNG, time,
+     * location, or other watermark is applied. AI mode uses only this path.
+     */
+    fun prepareCleanPhoto(source: File, spec: WatermarkRenderSpec, destination: File): File {
+        val clean = prepareCleanBitmap(source, spec)
+        try {
+            destination.outputStream().buffered().use { stream ->
+                check(clean.compress(Bitmap.CompressFormat.JPEG, 95, stream)) { "干净照片写入失败" }
+            }
+            return destination
+        } catch (error: Throwable) {
+            destination.delete()
+            throw error
+        } finally {
+            clean.recycle()
+        }
+    }
+
+    /** Copies an already encoded image to the gallery without resizing/recompressing it. */
+    fun saveFileToGallery(
+        context: Context,
+        source: File,
+        prefix: String,
+        mimeType: String = "image/jpeg"
+    ): Uri {
+        val extension = when (mimeType) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
+        return createGalleryEntry(context, prefix, mimeType, extension) { stream ->
+            source.inputStream().buffered().use { input -> input.copyTo(stream) }
+        }
+    }
+
+    private fun saveBitmapToGallery(context: Context, bitmap: Bitmap, prefix: String): Uri {
+        return createGalleryEntry(context, prefix, "image/jpeg", "jpg") { stream ->
+            check(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)) { "照片保存失败" }
+        }
+    }
+
+    private fun createGalleryEntry(
+        context: Context,
+        prefix: String,
+        mimeType: String,
+        extension: String,
+        write: (java.io.OutputStream) -> Unit
+    ): Uri {
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "watermark_$stamp.jpg")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.DISPLAY_NAME, "${prefix}_$stamp.$extension")
+            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/miku camera")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
@@ -78,9 +106,7 @@ object PhotoComposer {
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             ?: error("无法创建相册文件")
         try {
-            resolver.openOutputStream(uri)?.use { stream ->
-                check(output.compress(Bitmap.CompressFormat.JPEG, 95, stream)) { "照片保存失败" }
-            } ?: error("无法写入相册")
+            resolver.openOutputStream(uri)?.use(write) ?: error("无法写入相册")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
             }
@@ -88,9 +114,30 @@ object PhotoComposer {
         } catch (error: Throwable) {
             resolver.delete(uri, null, null)
             throw error
-        } finally {
-            output.recycle()
         }
+    }
+
+    private fun prepareCleanBitmap(source: File, spec: WatermarkRenderSpec): Bitmap {
+        val decoded = BitmapFactory.decodeFile(source.absolutePath)
+            ?: error("无法读取相机照片")
+        val exifOriented = orient(decoded, source)
+        if (exifOriented !== decoded) decoded.recycle()
+
+        val viewfinderAspect = spec.viewfinderWidth.toFloat() /
+            spec.viewfinderHeight.coerceAtLeast(1).toFloat()
+        val framed = cropToAspect(exifOriented, viewfinderAspect)
+        if (framed !== exifOriented) exifOriented.recycle()
+
+        val oriented = rotateToPhysicalOrientation(
+            framed,
+            spec.orientationDegrees,
+            spec.isFrontFacing
+        )
+        if (oriented !== framed) framed.recycle()
+
+        val previewMatched = if (spec.isFrontFacing) mirrorHorizontally(oriented) else oriented
+        if (previewMatched !== oriented) oriented.recycle()
+        return previewMatched
     }
 
     private fun orient(bitmap: Bitmap, file: File): Bitmap {

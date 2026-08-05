@@ -7,6 +7,25 @@ import org.json.JSONArray
 class PresetStore(context: Context) {
     private val preferences = context.getSharedPreferences("watermark_presets", Context.MODE_PRIVATE)
 
+    /**
+     * Adds a bundled preset exactly once per installation. A fresh install
+     * selects it; upgrades preserve the user's current selection. The migration
+     * marker also respects a later user deletion instead of recreating it.
+     */
+    fun installBundledPresetIfNeeded(preset: WatermarkPreset): WatermarkPreset? {
+        if (preferences.getBoolean(KEY_BUNDLED_MIKU_INSTALLED, false)) return loadSelected()
+        val hadPresets = loadAll().isNotEmpty()
+        val selectedBefore = preferences.getString(KEY_SELECTED_PRESET_ID, null)
+        val success = save(preset)
+        if (!success) return loadSelected()
+        val editor = preferences.edit().putBoolean(KEY_BUNDLED_MIKU_INSTALLED, true)
+        if (!hadPresets && selectedBefore == null) {
+            editor.putString(KEY_SELECTED_PRESET_ID, preset.id)
+        }
+        editor.commit()
+        return loadSelected()
+    }
+
     fun loadAll(): List<WatermarkPreset> = runCatching {
         val array = JSONArray(preferences.getString(KEY_PRESETS, "[]"))
         buildList {
@@ -54,5 +73,6 @@ class PresetStore(context: Context) {
     private companion object {
         const val KEY_PRESETS = "presets"
         const val KEY_SELECTED_PRESET_ID = "selected_preset_id"
+        const val KEY_BUNDLED_MIKU_INSTALLED = "bundled_miku_v1_installed"
     }
 }

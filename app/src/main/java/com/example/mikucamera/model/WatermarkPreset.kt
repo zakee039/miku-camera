@@ -90,6 +90,7 @@ data class WatermarkPreset(
 
     companion object {
         const val CURRENT_LAYOUT_VERSION = 10
+        const val BUILTIN_MIKU_ID = "builtin_miku"
 
         /** Creates one complete default layout for each device orientation. */
         fun newDraft(): WatermarkPreset {
@@ -101,6 +102,24 @@ data class WatermarkPreset(
             )
             preset.portraitLayout = portrait
             preset.landscapeLayout = landscape
+            return preset
+        }
+
+        fun builtinMiku(imageUri: String): WatermarkPreset {
+            val preset = newDraft().copy(
+                id = BUILTIN_MIKU_ID,
+                name = "miku",
+                imageUri = imageUri,
+                showTime = true,
+                showLocation = true,
+                includeStreet = false
+            )
+            val portrait = preset.activeLayout()
+            preset.portraitLayout = portrait
+            preset.landscapeLayout = portrait.rotateToLandscape(true).copy(
+                timeY = 0.93f,
+                locationY = 0.98f
+            )
             return preset
         }
 

@@ -36,24 +36,80 @@
             android:paddingTop="6dp"
             android:paddingBottom="6dp">
 
-            <TextView
-                android:id="@+id/selectWatermarkButton"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="@drawable/overlay_circle_button"
-                android:contentDescription="水印"
-                android:gravity="center"
-                android:text="🌸"
-                android:textColor="@color/white"
-                android:textSize="20sp" />
+            <FrameLayout
+                android:layout_width="88dp"
+                android:layout_height="44dp">
+
+                <LinearLayout
+                    android:id="@+id/normalLeftTools"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/selectWatermarkButton"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/overlay_circle_button"
+                        android:contentDescription="水印"
+                        android:gravity="center"
+                        android:text="🌸"
+                        android:textColor="@color/white"
+                        android:textSize="20sp" />
+
+                    <TextView
+                        android:id="@+id/aiModeButton"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@null"
+                        android:contentDescription="进入 AI mode"
+                        android:gravity="center"
+                        android:text="🤖"
+                        android:textColor="@color/white"
+                        android:textSize="20sp"
+                        android:translationX="-4dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/aiLeftTools"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/aiBackButton"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/overlay_circle_button"
+                        android:contentDescription="退出 AI mode"
+                        android:gravity="center"
+                        android:text="←"
+                        android:textColor="@color/white"
+                        android:textSize="24sp" />
+
+                    <TextView
+                        android:id="@+id/aiSettingsButton"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@null"
+                        android:contentDescription="AI 设置"
+                        android:gravity="center"
+                        android:text="⚙"
+                        android:textColor="@color/white"
+                        android:textSize="20sp" />
+                </LinearLayout>
+            </FrameLayout>
 
             <!-- Between 🌸 and flash: GPS status; fixed middle slot, marquee if long -->
             <TextView
                 android:id="@+id/locationStatusView"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:ellipsize="marquee"
                 android:focusable="true"
@@ -67,16 +123,34 @@
                 android:textColor="#CCFFFFFF"
                 android:textSize="12sp" />
 
-            <FrameLayout
-                android:id="@+id/flashButton"
-                android:layout_width="44dp"
+            <LinearLayout
+                android:layout_width="88dp"
                 android:layout_height="44dp"
-                android:background="@drawable/overlay_circle_button"
-                android:clickable="true"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:contentDescription="闪光灯"
-                android:focusable="true">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/aboutButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@null"
+                    android:contentDescription="关于 miku camera"
+                    android:gravity="center"
+                    android:text="🥰"
+                    android:textColor="@color/white"
+                    android:textSize="20sp"
+                    android:translationX="4dp" />
+
+                <FrameLayout
+                    android:id="@+id/flashButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/overlay_circle_button"
+                    android:clickable="true"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:contentDescription="闪光灯"
+                    android:focusable="true">
 
                 <!-- Tight box around ⚡ so ❌ / A sit on the glyph, not the circle edge -->
                 <FrameLayout
@@ -109,7 +183,63 @@
                         android:translationY="2dp"
                         android:visibility="gone" />
                 </FrameLayout>
-            </FrameLayout>
+                </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/aiCaptureProgressBar"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:background="#99000000"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/aiCaptureStep"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="● 拍照"
+                android:textColor="@color/accent"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <View
+                android:id="@+id/aiCaptureConnector"
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
+                android:layout_weight="1"
+                android:background="#55FFFFFF" />
+
+            <TextView
+                android:id="@+id/aiPromptStep"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="○ 提示词"
+                android:textColor="#77FFFFFF"
+                android:textSize="13sp" />
+
+            <View
+                android:id="@+id/aiPromptConnector"
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
+                android:layout_weight="1"
+                android:background="#55FFFFFF" />
+
+            <TextView
+                android:id="@+id/aiGenerateStep"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="○ AI生成"
+                android:textColor="#77FFFFFF"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <!-- 3:4 capture FOV (positioned in code) -->
@@ -349,6 +479,368 @@
                         android:minHeight="36dp"
                         android:text="保存水印" />
                 </LinearLayout>
+            </LinearLayout>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/aiPageHost"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/black"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp">
+
+                    <TextView
+                        android:id="@+id/aiPageBackButton"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/overlay_circle_button"
+                        android:contentDescription="退出 AI mode"
+                        android:gravity="center"
+                        android:text="←"
+                        android:textColor="@color/white"
+                        android:textSize="24sp" />
+
+                    <TextView
+                        android:id="@+id/aiPageSettingsButton"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/overlay_circle_button"
+                        android:contentDescription="AI 设置"
+                        android:gravity="center"
+                        android:text="⚙"
+                        android:textColor="@color/white"
+                        android:textSize="20sp" />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="AI MODE"
+                        android:textColor="@color/accent"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:paddingStart="24dp"
+                    android:paddingEnd="24dp">
+
+                    <TextView
+                        android:id="@+id/aiPageCaptureStep"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="✓ 拍照"
+                        android:textColor="@color/accent"
+                        android:textSize="13sp" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginEnd="10dp"
+                        android:layout_weight="1"
+                        android:background="@color/accent" />
+
+                    <TextView
+                        android:id="@+id/aiPagePromptStep"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="● 提示词"
+                        android:textColor="@color/accent"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <View
+                        android:id="@+id/aiPagePromptConnector"
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginEnd="10dp"
+                        android:layout_weight="1"
+                        android:background="#55FFFFFF" />
+
+                    <TextView
+                        android:id="@+id/aiPageGenerateStep"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="○ AI生成"
+                        android:textColor="#77FFFFFF"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+
+                    <ScrollView
+                        android:id="@+id/aiPromptPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fillViewport="true">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="20dp"
+                            android:paddingEnd="20dp"
+                            android:paddingBottom="20dp">
+
+                            <ImageView
+                                android:id="@+id/aiOriginalPreview"
+                                android:layout_width="match_parent"
+                                android:layout_height="210dp"
+                                android:adjustViewBounds="true"
+                                android:background="#181818"
+                                android:contentDescription="已拍摄的干净照片"
+                                android:scaleType="centerInside" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:text="这次想让 Miku 做什么？"
+                                android:textColor="@color/white"
+                                android:textSize="18sp"
+                                android:textStyle="bold" />
+
+                            <EditText
+                                android:id="@+id/aiPromptEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="120dp"
+                                android:layout_marginTop="8dp"
+                                android:background="@drawable/ai_prompt_background"
+                                android:gravity="top|start"
+                                android:hint="可在这里修改本次提示词"
+                                android:inputType="textCapSentences|textMultiLine"
+                                android:maxLength="2000"
+                                android:padding="14dp"
+                                android:textColor="@color/white"
+                                android:textColorHint="#77FFFFFF"
+                                android:textSize="15sp" />
+
+                            <TextView
+                                android:id="@+id/aiMetadataText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:lineSpacingExtra="4dp"
+                                android:textColor="#CCFFFFFF"
+                                android:textSize="13sp" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="10dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <com.google.android.material.switchmaterial.SwitchMaterial
+                                    android:id="@+id/aiTimeWatermarkSwitch"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:checked="true"
+                                    android:text="时间水印"
+                                    android:textColor="@color/white"
+                                    android:textSize="13sp" />
+
+                                <com.google.android.material.switchmaterial.SwitchMaterial
+                                    android:id="@+id/aiLocationWatermarkSwitch"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:checked="true"
+                                    android:text="地点水印"
+                                    android:textColor="@color/white"
+                                    android:textSize="13sp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:gravity="center"
+                                android:orientation="horizontal">
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/aiRetakeButton"
+                                    style="@style/Widget.Material3.Button.TextButton"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_weight="1"
+                                    android:text="重新拍摄"
+                                    android:textColor="@color/white" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/aiGenerateButton"
+                                    style="@style/Widget.Material3.Button"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="10dp"
+                                    android:layout_weight="1.4"
+                                    android:text="开始生成" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </ScrollView>
+
+                    <LinearLayout
+                        android:id="@+id/aiGeneratingPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="28dp"
+                        android:visibility="gone">
+
+                        <ProgressBar
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:indeterminateTint="@color/accent" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="22dp"
+                            android:text="Miku 创作中…"
+                            android:textColor="@color/white"
+                            android:textSize="22sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/aiGenerationStatusText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:gravity="center"
+                            android:text="正在准备干净照片"
+                            android:textColor="#BBFFFFFF"
+                            android:textSize="14sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiCancelGenerationButton"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:layout_marginTop="24dp"
+                            android:text="取消生成"
+                            android:textColor="@color/white" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/aiResultPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="12dp"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:id="@+id/aiResultPreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:adjustViewBounds="true"
+                            android:background="#181818"
+                            android:contentDescription="AI 生成结果，按住查看原图"
+                            android:scaleType="centerInside" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:paddingTop="5dp"
+                            android:paddingBottom="5dp"
+                            android:text="按住图片查看原图"
+                            android:textColor="#99FFFFFF"
+                            android:textSize="12sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiSaveResultButton"
+                                style="@style/Widget.Material3.Button"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_weight="1"
+                                android:text="保存 AI 图"
+                                android:textSize="12sp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiSaveOriginalButton"
+                                style="@style/Widget.Material3.Button.TonalButton"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:text="仅原图"
+                                android:textSize="12sp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiSaveBothButton"
+                                style="@style/Widget.Material3.Button.TonalButton"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:text="保存两张"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiEditPromptButton"
+                                style="@style/Widget.Material3.Button.TextButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="40dp"
+                                android:text="修改提示词"
+                                android:textColor="@color/white"
+                                android:textSize="12sp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiRegenerateButton"
+                                style="@style/Widget.Material3.Button.TextButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="40dp"
+                                android:text="重新生成"
+                                android:textColor="@color/accent"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </FrameLayout>
             </LinearLayout>
         </FrameLayout>
     </FrameLayout>

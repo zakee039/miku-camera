@@ -1,5 +1,7 @@
 # miku camera
 
+[Buy me a coffee](https://ifdian.net/a/zakee/plan)
+
 一款以 **Miku** 为主角的原生 Android 相机，由 [zakee](https://zakee.fun) 开发。围绕“让 Miku 进入现实照片”设计的拍摄体验。
 
 [个人主页](https://zakee.fun) · [Buy me a coffee](https://ifdian.net/a/zakee/plan)
@@ -9,6 +11,10 @@
 ## 关于 miku camera
 
 miku camera 是一款以 Miku 为主角的 Android 相机。普通模式可将 Miku 水印、时间与地点自然叠加在照片中；AI mode 会结合人物或风景重新创作，让 Miku 与现实画面互动融合，并生成有趣可爱的专属时间地点水印。
+
+### 遇到不兼容问题怎么办？
+
+如果设备、Android 版本或本地构建环境出现不兼容问题，可以使用 Agent 辅助排查和构建。将具体的错误日志、Android 版本、设备型号以及 JDK、Gradle 和 Android Gradle Plugin 版本提供给 Agent，它可以帮助检查项目配置、调整依赖并定位构建失败原因。
 
 ## 主要功能
 

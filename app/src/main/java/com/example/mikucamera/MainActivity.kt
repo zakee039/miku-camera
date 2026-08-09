@@ -31,6 +31,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
+import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -38,6 +39,7 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,8 +63,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.example.mikucamera.camera.PhotoComposer
 import com.example.mikucamera.ai.AiImageClient
 import com.example.mikucamera.ai.AiImageException
+import com.example.mikucamera.ai.AiApiProfile
 import com.example.mikucamera.ai.AiPromptBuilder
 import com.example.mikucamera.ai.AiOutfitStyle
+import com.example.mikucamera.ai.AiServicePreset
 import com.example.mikucamera.ai.AiSettingsStore
 import com.example.mikucamera.ai.AiVisualStyle
 import com.example.mikucamera.data.PresetStore
@@ -477,9 +481,9 @@ class MainActivity : AppCompatActivity() {
         aiModeButton.setOnClickListener { requestEnterAiMode() }
         aboutButton.setOnClickListener { showAboutDialog() }
         aiBackButton.setOnClickListener { requestExitAiMode() }
-        aiSettingsButton.setOnClickListener { showAiSettingsDialog() }
+        aiSettingsButton.setOnClickListener { showAiSettingsHome() }
         aiPageBackButton.setOnClickListener { requestExitAiMode() }
-        aiPageSettingsButton.setOnClickListener { showAiSettingsDialog() }
+        aiPageSettingsButton.setOnClickListener { showAiSettingsHome() }
         findViewById<MaterialButton>(R.id.aiRetakeButton).setOnClickListener { returnToAiCapture() }
         findViewById<MaterialButton>(R.id.aiGenerateButton).setOnClickListener { startAiGeneration() }
         findViewById<MaterialButton>(R.id.aiCancelGenerationButton).setOnClickListener { cancelAiGeneration() }
@@ -604,8 +608,9 @@ class MainActivity : AppCompatActivity() {
             aiPromptEditText.setSelection(aiPromptEditText.text.length)
         }
         if (resetPrompt) {
-            aiTimeWatermarkSwitch.isChecked = true
-            aiLocationWatermarkSwitch.isChecked = true
+            val settings = aiSettingsStore.load()
+            aiTimeWatermarkSwitch.isChecked = settings.includeTimeWatermark
+            aiLocationWatermarkSwitch.isChecked = settings.includeLocationWatermark
         }
         aiOriginalPreview.setImageURI(null)
         aiOriginalPreview.setImageURI(Uri.fromFile(session.originalFile))
@@ -616,9 +621,15 @@ class MainActivity : AppCompatActivity() {
     private fun startAiGeneration() {
         val session = aiSession ?: return toast("请先拍摄照片")
         val settings = aiSettingsStore.load()
+        val profile = settings.activeProfile
+        if (!profile.preset.supportsCurrentProtocol) {
+            toast("${profile.preset.displayName} 预设需要专用接口适配，当前版本暂不能直接生成")
+            showAiApiProfilesDialog()
+            return
+        }
         if (settings.apiKey.isBlank()) {
-            toast("请先设置 OpenAI API Key")
-            showAiSettingsDialog()
+            toast("请先设置 API Key")
+            showAiSettingsHome()
             return
         }
         val prompt = AiPromptBuilder.build(
@@ -648,6 +659,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 aiImageClient.createEdit(
                     baseUrl = settings.baseUrl,
+                    endpointPath = profile.endpoint,
                     apiKey = settings.apiKey,
                     model = settings.model,
                     visualStyle = settings.visualStyle,
@@ -675,6 +687,7 @@ class MainActivity : AppCompatActivity() {
                         lastAiDebugLog = (error as? AiImageException)?.debugLog
                             ?: buildFallbackAiLog(
                                 settings.baseUrl,
+                                profile.endpoint,
                                 settings.model,
                                 settings.visualStyle,
                                 settings.outfitStyle,
@@ -853,32 +866,15 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun showAiSettingsDialog() {
+    private fun showAiSettingsHome() {
+        showAiImageSettingsDialog()
+    }
+
+    private fun showAiImageSettingsDialog() {
         val current = aiSettingsStore.load()
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((20 * density).roundToInt(), 0, (20 * density).roundToInt(), 0)
-        }
-        val baseUrlInput = EditText(this).apply {
-            hint = "https://api.openai.com/v1"
-            setText(current.baseUrl)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setSingleLine(true)
-            setSelection(text.length)
-        }
-        val keyInput = EditText(this).apply {
-            hint = "OpenAI API Key"
-            setText(current.apiKey)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-            setSingleLine(true)
-            setSelection(text.length)
-        }
-        val modelInput = EditText(this).apply {
-            hint = AiSettingsStore.DEFAULT_MODEL
-            setText(current.model)
-            inputType = InputType.TYPE_CLASS_TEXT
-            setSingleLine(true)
-            setSelection(text.length)
         }
         val visualStyleGroup = RadioGroup(this).apply {
             orientation = RadioGroup.HORIZONTAL
@@ -919,22 +915,19 @@ class MainActivity : AppCompatActivity() {
             maxLines = 8
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
-        container.addView(TextView(this).apply { text = "Base URL"; setPadding(0, 12, 0, 0) })
-        container.addView(baseUrlInput)
-        container.addView(TextView(this).apply { text = "OpenAI API Key"; setPadding(0, 20, 0, 0) })
-        container.addView(keyInput)
-        container.addView(TextView(this).apply { text = "模型"; setPadding(0, 20, 0, 0) })
-        container.addView(modelInput)
         container.addView(TextView(this).apply { text = "形象风格"; setPadding(0, 20, 0, 0) })
         container.addView(visualStyleGroup)
         container.addView(TextView(this).apply { text = "服装风格"; setPadding(0, 16, 0, 0) })
         container.addView(outfitStyleGroup)
         container.addView(TextView(this).apply { text = "默认提示词"; setPadding(0, 20, 0, 0) })
         container.addView(promptInput)
+        val timeSwitch = SwitchMaterial(this).apply { text = "生成时间水印"; isChecked = current.includeTimeWatermark }
+        val locationSwitch = SwitchMaterial(this).apply { text = "生成地点水印"; isChecked = current.includeLocationWatermark }
+        container.addView(TextView(this).apply { text = "AI 水印"; setPadding(0, 20, 0, 0) })
+        container.addView(timeSwitch)
+        container.addView(locationSwitch)
         container.addView(TextView(this).apply {
-            text = "Base URL 填写到 API 根路径，例如 https://api.openai.com/v1；应用会自动调用 /images/edits。\n" +
-                "默认模型：${AiSettingsStore.DEFAULT_MODEL} · Key 直接显示。\n" +
-                "照片、时间、地点、风格和提示词将发送到该服务。"
+            text = "当前 API 配置：${current.activeProfile.name} · ${current.activeProfile.model}"
             textSize = 12f
             setPadding(0, 16, 0, 0)
         })
@@ -943,10 +936,10 @@ class MainActivity : AppCompatActivity() {
             addView(container)
         }
         val dialog = AlertDialog.Builder(this)
-            .setTitle("AI 设置")
+            .setTitle("图像参数")
             .setView(scrollView)
             .setNegativeButton("取消", null)
-            .setNeutralButton("删除 Key", null)
+            .setNeutralButton("API 配置", null)
             .setPositiveButton("保存", null)
             .create()
         dialog.setOnShowListener {
@@ -958,16 +951,7 @@ class MainActivity : AppCompatActivity() {
                 val outfitStyle = if (outfitStyleGroup.checkedRadioButtonId == officialOutfitButton.id) {
                     AiOutfitStyle.OFFICIAL
                 } else AiOutfitStyle.SCENE_ADAPTIVE
-                runCatching {
-                    aiSettingsStore.save(
-                        baseUrl = baseUrlInput.text.toString(),
-                        apiKey = keyInput.text.toString(),
-                        model = modelInput.text.toString(),
-                        visualStyle = visualStyle,
-                        outfitStyle = outfitStyle,
-                        defaultPrompt = prompt
-                    )
-                }
+                runCatching { aiSettingsStore.saveImageSettings(visualStyle, outfitStyle, prompt, timeSwitch.isChecked, locationSwitch.isChecked) }
                     .onSuccess {
                         updateAiMetadataLabel()
                         toast("AI 设置已保存")
@@ -975,28 +959,108 @@ class MainActivity : AppCompatActivity() {
                     }
                     .onFailure { toast("设置保存失败: ${it.message ?: "未知错误"}") }
             }
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-                keyInput.text?.clear()
-                runCatching {
-                    aiSettingsStore.save(
-                        baseUrl = baseUrlInput.text.toString(),
-                        apiKey = "",
-                        model = modelInput.text.toString(),
-                        visualStyle = if (visualStyleGroup.checkedRadioButtonId == realisticButton.id) {
-                            AiVisualStyle.REALISTIC
-                        } else AiVisualStyle.ANIME,
-                        outfitStyle = if (outfitStyleGroup.checkedRadioButtonId == officialOutfitButton.id) {
-                            AiOutfitStyle.OFFICIAL
-                        } else AiOutfitStyle.SCENE_ADAPTIVE,
-                        defaultPrompt = promptInput.text.toString()
-                    )
-                }.onFailure {
-                    toast(it.message ?: "Base URL 格式无效")
-                    return@setOnClickListener
-                }
-                updateAiMetadataLabel()
-                toast("API Key 已删除")
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { dialog.dismiss(); showAiApiProfilesDialog() }
+        }
+        dialog.show()
+    }
+
+    private fun showAiApiProfilesDialog() {
+        val settings = aiSettingsStore.load()
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * density).roundToInt(), 0, (20 * density).roundToInt(), 0)
+        }
+        container.addView(TextView(this).apply {
+            text = "选择当前使用的 API 配置，或新增一组配置。API Key 会使用 Android Keystore 加密保存。"
+            textSize = 13f
+            setPadding(0, 0, 0, (12 * density).roundToInt())
+        })
+        settings.profiles.forEach { profile ->
+            val row = TextView(this).apply {
+                text = (if (profile.id == settings.activeProfileId) "✓ " else "○ ") + profile.name + "\n" + profile.preset.displayName + " · " + profile.model
+                textSize = 16f
+                setPadding((12 * density).roundToInt(), (14 * density).roundToInt(), (12 * density).roundToInt(), (14 * density).roundToInt())
+                setBackgroundColor(if (profile.id == settings.activeProfileId) Color.parseColor("#183F776E") else Color.TRANSPARENT)
+                setOnClickListener { showAiApiProfileEditor(profile) }
             }
+            container.addView(row)
+        }
+        val scroll = ScrollView(this).apply { addView(container) }
+        AlertDialog.Builder(this)
+            .setTitle("API 配置")
+            .setView(scroll)
+            .setNegativeButton("返回图像参数") { _, _ -> showAiImageSettingsDialog() }
+            .setNeutralButton("新增配置") { _, _ -> showAiApiProfileEditor(null) }
+            .show()
+    }
+
+    private fun showAiApiProfileEditor(existing: AiApiProfile?) {
+        val selected = existing ?: AiApiProfile(name = "OpenAI", preset = AiServicePreset.OPENAI,
+            baseUrl = AiServicePreset.OPENAI.defaultBaseUrl, endpoint = AiServicePreset.OPENAI.defaultEndpoint, apiKey = "", model = AiServicePreset.OPENAI.defaultModel)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * density).roundToInt(), 0, (20 * density).roundToInt(), 0)
+        }
+        fun input(value: String, hint: String, type: Int = InputType.TYPE_CLASS_TEXT): EditText = EditText(this).apply {
+            setText(value); this.hint = hint; inputType = type; setSingleLine(true); setSelection(text.length)
+        }
+        val nameInput = input(selected.name, "例如：OpenAI 主账号")
+        val presetSpinner = Spinner(this)
+        val presets = AiServicePreset.entries.toList()
+        presetSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, presets.map { it.displayName })
+        presetSpinner.setSelection(presets.indexOf(selected.preset).coerceAtLeast(0))
+        val baseUrlInput = input(selected.baseUrl, "https://...", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        val endpointInput = input(selected.endpoint, "/images/edits")
+        val keyInput = input(selected.apiKey, "API Key", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        val modelInput = input(selected.model, "模型名称")
+        val hint = TextView(this).apply { textSize = 12f; setPadding(0, (12 * density).roundToInt(), 0, 0) }
+        fun updatePresetHint(fillDefaults: Boolean) {
+            val preset = presets[presetSpinner.selectedItemPosition]
+            if (fillDefaults) {
+                baseUrlInput.setText(preset.defaultBaseUrl)
+                endpointInput.setText(preset.defaultEndpoint)
+                modelInput.setText(preset.defaultModel)
+            }
+            hint.text = if (preset.supportsCurrentProtocol) {
+                "使用 OpenAI 图片编辑兼容协议，可直接生成。"
+            } else {
+                "已保存官方预设；该服务需要专用请求协议适配，当前版本不能直接生成。"
+            }
+        }
+        presetSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                updatePresetHint(position != presets.indexOf(selected.preset))
+            }
+        }
+        updatePresetHint(false)
+        container.addView(TextView(this).apply { text = "配置名称" }); container.addView(nameInput)
+        container.addView(TextView(this).apply { text = "服务类型 / 预设"; setPadding(0, 16, 0, 0) }); container.addView(presetSpinner)
+        container.addView(TextView(this).apply { text = "Base URL"; setPadding(0, 16, 0, 0) }); container.addView(baseUrlInput)
+        container.addView(TextView(this).apply { text = "接口"; setPadding(0, 16, 0, 0) }); container.addView(endpointInput)
+        container.addView(TextView(this).apply { text = "API Key"; setPadding(0, 16, 0, 0) }); container.addView(keyInput)
+        container.addView(TextView(this).apply { text = "模型"; setPadding(0, 16, 0, 0) }); container.addView(modelInput); container.addView(hint)
+        val dialog = AlertDialog.Builder(this).setTitle(if (existing == null) "新增 API 配置" else "编辑 API 配置")
+            .setView(ScrollView(this).apply { addView(container) }).setNegativeButton("取消", null)
+            .setNeutralButton(if (existing == null) "" else "删除", null).setPositiveButton("保存", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val preset = presets[presetSpinner.selectedItemPosition]
+                val updated = selected.copy(name = nameInput.text.toString(), preset = preset, baseUrl = baseUrlInput.text.toString(),
+                    endpoint = endpointInput.text.toString(), apiKey = keyInput.text.toString(), model = modelInput.text.toString())
+                val current = aiSettingsStore.load()
+                val profiles = if (existing == null) current.profiles + updated else current.profiles.map { if (it.id == updated.id) updated else it }
+                runCatching { aiSettingsStore.saveProfiles(profiles, updated.id) }.onSuccess {
+                    updateAiMetadataLabel(); toast("API 配置已保存"); dialog.dismiss(); showAiApiProfilesDialog()
+                }.onFailure { toast(it.message ?: "API 配置无效") }
+            }
+            if (existing != null) dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                val current = aiSettingsStore.load()
+                if (current.profiles.size == 1) { toast("至少保留一组 API 配置"); return@setOnClickListener }
+                val profiles = current.profiles.filterNot { it.id == existing.id }
+                aiSettingsStore.saveProfiles(profiles, profiles.first().id)
+                updateAiMetadataLabel(); dialog.dismiss(); showAiApiProfilesDialog()
+            } else dialog.getButton(AlertDialog.BUTTON_NEUTRAL).visibility = View.GONE
         }
         dialog.show()
     }
@@ -1119,12 +1183,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildFallbackAiLog(
         baseUrl: String,
+        endpointPath: String,
         model: String,
         visualStyle: AiVisualStyle,
         outfitStyle: AiOutfitStyle,
         error: Throwable
     ): String {
-        val safeEndpoint = runCatching { AiImageClient.editEndpoint(baseUrl) }
+        val safeEndpoint = runCatching { AiImageClient.endpoint(baseUrl, endpointPath) }
             .getOrDefault("Base URL 无效")
             .substringBefore('?')
         val safeMessage = (error.message ?: "unknown")

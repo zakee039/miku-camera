@@ -26,6 +26,7 @@ class AiImageClient {
 
     fun createEdit(
         baseUrl: String,
+        endpointPath: String = "/images/edits",
         apiKey: String,
         model: String,
         visualStyle: AiVisualStyle,
@@ -46,7 +47,7 @@ class AiImageClient {
             check(apiKey.isNotBlank()) { "请先在 AI 设置中填写 OpenAI API Key" }
             check(model.isNotBlank()) { "请先在 AI 设置中填写图像模型" }
             check(source.isFile && source.length() > 0L) { "干净照片不存在" }
-            val endpoint = editEndpoint(baseUrl)
+            val endpoint = endpoint(baseUrl, endpointPath)
             val sourceSize = readImageSize(source)
             record("miku camera AI request log (sensitive values removed)")
             record("endpoint=${redactUrl(endpoint)}")
@@ -120,7 +121,7 @@ class AiImageClient {
                 record(summarizeResponse(body))
                 writeImageFromJson(
                     body = body,
-                    baseUrl = baseUrl,
+                    endpoint = endpoint,
                     apiKey = apiKey,
                     destination = destination,
                     record = ::record
@@ -153,7 +154,7 @@ class AiImageClient {
 
     private fun writeImageFromJson(
         body: String,
-        baseUrl: String,
+        endpoint: String,
         apiKey: String,
         destination: File,
         record: (String) -> Unit
@@ -203,17 +204,17 @@ class AiImageClient {
             return
         }
 
-        downloadImage(imageUrl, baseUrl, apiKey, destination, record)
+        downloadImage(imageUrl, endpoint, apiKey, destination, record)
     }
 
     private fun downloadImage(
         value: String,
-        baseUrl: String,
+        endpoint: String,
         apiKey: String,
         destination: File,
         record: (String) -> Unit
     ) {
-        val endpointUri = URI(editEndpoint(baseUrl))
+        val endpointUri = URI(endpoint)
         val resolved = endpointUri.resolve(value)
         require(resolved.scheme?.lowercase() == "https" && !resolved.host.isNullOrBlank()) {
             "服务返回的图片 URL 必须是完整的 HTTPS 地址"
@@ -315,6 +316,15 @@ class AiImageClient {
         }
 
         fun editEndpoint(baseUrl: String): String = normalizeBaseUrl(baseUrl) + "/images/edits"
+
+        fun endpoint(baseUrl: String, endpointPath: String): String {
+            val base = normalizeBaseUrl(baseUrl)
+            val path = endpointPath.trim().ifBlank { "/images/edits" }
+            require(path.startsWith("/") && !path.contains("://") && !path.contains('?') && !path.contains('#')) {
+                "接口必须是以 / 开头的相对路径"
+            }
+            return base + path
+        }
 
         fun detectImageMime(file: File): String {
             val header = ByteArray(12)

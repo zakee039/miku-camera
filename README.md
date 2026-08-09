@@ -6,7 +6,7 @@
 
 [个人主页](https://zakee.fun) · [Buy me a coffee](https://ifdian.net/a/zakee/plan)
 
-当前版本：`1.4.2`（`versionCode 10`）
+当前版本：`1.4.3`（`versionCode 11`）
 
 ## 关于 miku camera
 

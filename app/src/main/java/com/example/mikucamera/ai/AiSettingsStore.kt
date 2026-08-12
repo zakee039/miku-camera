@@ -28,12 +28,15 @@ enum class AiServicePreset(
     val defaultBaseUrl: String,
     val defaultEndpoint: String,
     val defaultModel: String,
-    val supportsCurrentProtocol: Boolean
+    val supportsCurrentProtocol: Boolean,
+    val useGenerationsProtocol: Boolean = false,
+    val useGeminiProtocol: Boolean = false,
+    val useQwenProtocol: Boolean = false
 ) {
     OPENAI("OpenAI", "https://api.openai.com/v1", "/images/edits", "gpt-image-2", true),
-    VOLCENGINE_ARK("字节跳动 / 火山方舟", "https://ark.cn-beijing.volces.com/api/v3", "/images/generations", "doubao-seedream-4-5-251128", false),
-    QWEN("Qwen / 阿里云百炼", "https://dashscope.aliyuncs.com/compatible-mode/v1", "/images/generations", "qwen-image-plus", false),
-    GEMINI("Gemini / Nano Banana", "https://generativelanguage.googleapis.com/v1beta", "/models/gemini-2.5-flash-image:generateContent", "gemini-2.5-flash-image", false),
+    VOLCENGINE_ARK("字节跳动 / 火山方舟", "https://ark.cn-beijing.volces.com/api/v3", "/images/generations", "doubao-seedream-5-0-260128", true, true),
+    QWEN("Qwen / 阿里云百炼", "https://dashscope.aliyuncs.com", "/api/v1/services/aigc/multimodal-generation/generation", "qwen-image-3.0-pro", true, false, false, true),
+    GEMINI("Gemini / Nano Banana", "https://generativelanguage.googleapis.com", "/v1beta/interactions", "gemini-3.1-flash-image", true, false, true),
     CUSTOM_OPENAI("自定义 OpenAI 兼容", "", "/images/edits", "", true);
 
     companion object { fun fromStored(value: String?) = entries.firstOrNull { it.name == value } ?: CUSTOM_OPENAI }
@@ -68,8 +71,14 @@ class AiSettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun load(): AiSettings {
-        val profiles = loadProfiles().ifEmpty { listOf(legacyProfile()) }
+        val storedProfiles = loadProfiles()
+        val profiles = storedProfiles
+            .map(::migrateProtocolProfile)
+            .ifEmpty { listOf(legacyProfile()) }
         val activeId = prefs.getString(KEY_ACTIVE_PROFILE, null).takeIf { id -> profiles.any { it.id == id } } ?: profiles.first().id
+        if (profiles != storedProfiles && storedProfiles.isNotEmpty()) {
+            saveProfiles(profiles, activeId)
+        }
         return AiSettings(profiles, activeId, AiVisualStyle.fromStored(prefs.getString(KEY_VISUAL_STYLE, null)),
             AiOutfitStyle.fromStored(prefs.getString(KEY_OUTFIT_STYLE, null)),
             prefs.getString(KEY_DEFAULT_PROMPT, DEFAULT_PROMPT) ?: DEFAULT_PROMPT,
@@ -115,6 +124,45 @@ class AiSettingsStore(context: Context) {
                 decrypt(item.optString("apiKey")).orEmpty(), item.optString("model"))
         }}
     }.getOrDefault(emptyList())
+
+    /**
+     * 1.4.3 的 Qwen/Gemini 预设保存的是当时未实现的占位协议地址。
+     * 仅替换已知的旧默认值，用户手动填写过的服务地址、接口或模型保持不变。
+     */
+    private fun migrateProtocolProfile(profile: AiApiProfile): AiApiProfile = when (profile.preset) {
+        AiServicePreset.QWEN -> profile.copy(
+            baseUrl = profile.baseUrl.replaceKnownLegacyValue(
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                AiServicePreset.QWEN.defaultBaseUrl
+            ),
+            endpoint = profile.endpoint.replaceKnownLegacyValue(
+                "/images/generations",
+                AiServicePreset.QWEN.defaultEndpoint
+            ),
+            model = profile.model.replaceKnownLegacyValue(
+                "qwen-image-plus",
+                AiServicePreset.QWEN.defaultModel
+            )
+        )
+        AiServicePreset.GEMINI -> profile.copy(
+            baseUrl = profile.baseUrl.replaceKnownLegacyValue(
+                "https://generativelanguage.googleapis.com/v1beta",
+                AiServicePreset.GEMINI.defaultBaseUrl
+            ),
+            endpoint = profile.endpoint.replaceKnownLegacyValue(
+                "/models/gemini-2.5-flash-image:generateContent",
+                AiServicePreset.GEMINI.defaultEndpoint
+            ),
+            model = profile.model.replaceKnownLegacyValue(
+                "gemini-2.5-flash-image",
+                AiServicePreset.GEMINI.defaultModel
+            )
+        )
+        else -> profile
+    }
+
+    private fun String.replaceKnownLegacyValue(legacy: String, replacement: String): String =
+        if (this == legacy) replacement else this
 
     private fun legacyProfile() = AiApiProfile(name = "OpenAI", preset = AiServicePreset.OPENAI,
         baseUrl = prefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL, endpoint = "/images/edits",

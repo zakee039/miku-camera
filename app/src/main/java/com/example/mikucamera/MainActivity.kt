@@ -63,6 +63,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.example.mikucamera.camera.PhotoComposer
 import com.example.mikucamera.ai.AiImageClient
 import com.example.mikucamera.ai.AiImageException
+import com.example.mikucamera.ai.AiSessionStore
 import com.example.mikucamera.ai.AiApiProfile
 import com.example.mikucamera.ai.AiPromptBuilder
 import com.example.mikucamera.ai.AiOutfitStyle
@@ -152,6 +153,7 @@ class MainActivity : AppCompatActivity() {
     private val store by lazy { PresetStore(this) }
     private val locationProvider by lazy { LocationProvider(this) }
     private val aiSettingsStore by lazy { AiSettingsStore(this) }
+    private val aiSessionStore by lazy { AiSessionStore(this) }
     private val aiImageClient = AiImageClient()
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val aiExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -248,6 +250,7 @@ class MainActivity : AppCompatActivity() {
         // Warm up GPS as soon as the camera opens so location is ready when needed.
         startLocationWarmup()
         if (!hasCameraPermission()) cameraPermission.launch(requiredCameraPermissions()) else startCamera()
+        restoreAiSessionIfNeeded()
     }
 
     /** Immersive camera UI: status bar hidden so the viewfinder is not framed by system chrome. */
@@ -616,6 +619,7 @@ class MainActivity : AppCompatActivity() {
         aiOriginalPreview.setImageURI(Uri.fromFile(session.originalFile))
         updateAiMetadataLabel()
         updateAiWorkflow(AiStage.PROMPT)
+        persistAiSession(stage = "PROMPT", prompt = aiPromptEditText.text.toString())
     }
 
     private fun startAiGeneration() {
@@ -654,7 +658,8 @@ class MainActivity : AppCompatActivity() {
         updateAiWorkflow(AiStage.GENERATING)
         session.resultFile?.delete()
         session.resultFile = null
-        val destination = File.createTempFile("miku_ai_result_", ".jpg", cacheDir)
+        persistAiSession(stage = "GENERATING", prompt = aiPromptEditText.text.toString())
+        val destination = aiSessionStore.newFile("miku_ai_result_", ".jpg")
         aiExecutor.execute {
             try {
                 aiImageClient.createEdit(
@@ -666,14 +671,18 @@ class MainActivity : AppCompatActivity() {
                     outfitStyle = settings.outfitStyle,
                     source = session.originalFile,
                     prompt = prompt,
-                    destination = destination
-                ) { status ->
-                    runOnUiThread {
-                        if (generationId == aiGenerationId && aiStage == AiStage.GENERATING) {
-                            aiGenerationStatusText.text = status
+                    destination = destination,
+                    onProgress = { status ->
+                        runOnUiThread {
+                            if (generationId == aiGenerationId && aiStage == AiStage.GENERATING) {
+                                aiGenerationStatusText.text = status
+                            }
                         }
-                    }
-                }
+                    },
+                    useGenerationsProtocol = profile.preset.useGenerationsProtocol,
+                    useGeminiProtocol = profile.preset.useGeminiProtocol,
+                    useQwenProtocol = profile.preset.useQwenProtocol
+                )
                 if (generationId != aiGenerationId) {
                     destination.delete()
                     return@execute
@@ -715,6 +724,10 @@ class MainActivity : AppCompatActivity() {
         val session = aiSession ?: return
         val result = session.resultFile ?: return
         aiStage = AiStage.RESULT
+        aiPageHost.visibility = View.VISIBLE
+        viewfinderHost.visibility = View.GONE
+        bottomChrome.visibility = View.GONE
+        cameraControls.visibility = View.GONE
         aiPromptPanel.visibility = View.GONE
         aiGeneratingPanel.visibility = View.GONE
         aiResultPanel.visibility = View.VISIBLE
@@ -723,6 +736,7 @@ class MainActivity : AppCompatActivity() {
         aiResultPreview.setImageURI(null)
         aiResultPreview.setImageURI(Uri.fromFile(result))
         updateAiWorkflow(AiStage.RESULT)
+        persistAiSession(stage = "RESULT", prompt = aiPromptEditText.text.toString(), resultPath = result.absolutePath)
     }
 
     private fun cancelAiGeneration() {
@@ -745,6 +759,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun returnToAiCapture() {
         aiSession?.let(::deleteAiSessionFiles)
+        aiSessionStore.clear()
         aiSession = null
         aiPromptEditText.text?.clear()
         enterAiCaptureStage()
@@ -819,7 +834,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun exitAiMode(deleteSession: Boolean) {
         hideKeyboard()
-        if (deleteSession) aiSession?.let(::deleteAiSessionFiles)
+        if (deleteSession) {
+            aiSession?.let(::deleteAiSessionFiles)
+            aiSessionStore.clear()
+        }
         aiSession = null
         aiGenerationId++
         cameraMode = CameraMode.NORMAL
@@ -971,22 +989,60 @@ class MainActivity : AppCompatActivity() {
             setPadding((20 * density).roundToInt(), 0, (20 * density).roundToInt(), 0)
         }
         container.addView(TextView(this).apply {
-            text = "选择当前使用的 API 配置，或新增一组配置。API Key 会使用 Android Keystore 加密保存。"
+            text = "点击圆圈切换当前使用的 API 配置；点击右侧名称区域进入编辑。API Key 会使用 Android Keystore 加密保存。"
             textSize = 13f
             setPadding(0, 0, 0, (12 * density).roundToInt())
         })
+        lateinit var dialog: AlertDialog
         settings.profiles.forEach { profile ->
-            val row = TextView(this).apply {
-                text = (if (profile.id == settings.activeProfileId) "✓ " else "○ ") + profile.name + "\n" + profile.preset.displayName + " · " + profile.model
-                textSize = 16f
-                setPadding((12 * density).roundToInt(), (14 * density).roundToInt(), (12 * density).roundToInt(), (14 * density).roundToInt())
-                setBackgroundColor(if (profile.id == settings.activeProfileId) Color.parseColor("#183F776E") else Color.TRANSPARENT)
+            val isActive = profile.id == settings.activeProfileId
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding((12 * density).roundToInt(), (10 * density).roundToInt(), (12 * density).roundToInt(), (10 * density).roundToInt())
+                setBackgroundColor(if (isActive) Color.parseColor("#183F776E") else Color.TRANSPARENT)
+            }
+            val checkbox = TextView(this).apply {
+                text = if (isActive) "✓" else "○"
+                textSize = 18f
+                setPadding(0, 0, (10 * density).roundToInt(), 0)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    if (isActive) return@setOnClickListener
+                    aiSettingsStore.saveProfiles(settings.profiles, profile.id)
+                    updateAiMetadataLabel()
+                    dialog.dismiss()
+                    showAiApiProfilesDialog()
+                }
+            }
+            val textBlock = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                isClickable = true
+                isFocusable = true
                 setOnClickListener { showAiApiProfileEditor(profile) }
             }
+            val nameView = TextView(this).apply {
+                text = profile.name
+                textSize = 16f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            val subView = TextView(this).apply {
+                text = profile.preset.displayName + " · " + profile.model
+                textSize = 13f
+                setTextColor(Color.parseColor("#888888"))
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            textBlock.addView(nameView)
+            textBlock.addView(subView)
+            row.addView(checkbox)
+            row.addView(textBlock, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             container.addView(row)
         }
         val scroll = ScrollView(this).apply { addView(container) }
-        AlertDialog.Builder(this)
+        dialog = AlertDialog.Builder(this)
             .setTitle("API 配置")
             .setView(scroll)
             .setNegativeButton("返回图像参数") { _, _ -> showAiImageSettingsDialog() }
@@ -1013,6 +1069,7 @@ class MainActivity : AppCompatActivity() {
         val endpointInput = input(selected.endpoint, "/images/edits")
         val keyInput = input(selected.apiKey, "API Key", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         val modelInput = input(selected.model, "模型名称")
+        val modelHint = TextView(this).apply { textSize = 12f; setTextColor(Color.parseColor("#888888")); setPadding(0, (4 * density).roundToInt(), 0, 0) }
         val hint = TextView(this).apply { textSize = 12f; setPadding(0, (12 * density).roundToInt(), 0, 0) }
         fun updatePresetHint(fillDefaults: Boolean) {
             val preset = presets[presetSpinner.selectedItemPosition]
@@ -1021,8 +1078,14 @@ class MainActivity : AppCompatActivity() {
                 endpointInput.setText(preset.defaultEndpoint)
                 modelInput.setText(preset.defaultModel)
             }
+            modelHint.text = "默认模型：${preset.defaultModel}（可手动修改为其他模型）"
             hint.text = if (preset.supportsCurrentProtocol) {
-                "使用 OpenAI 图片编辑兼容协议，可直接生成。"
+                when {
+                    preset.useGeminiProtocol -> "使用 Gemini Interactions API，可直接生成（本地照片会以内联 Base64 提交）。"
+                    preset.useQwenProtocol -> "使用通义千问多模态生成协议，可直接生成（本地照片会以内联 Base64 提交，返回结果需下载）。"
+                    preset.useGenerationsProtocol -> "使用火山方舟图片生成协议，可直接生成（本地照片会以内联 Base64 提交）。"
+                    else -> "使用 OpenAI 图片编辑兼容协议，可直接生成。"
+                }
             } else {
                 "已保存官方预设；该服务需要专用请求协议适配，当前版本不能直接生成。"
             }
@@ -1039,7 +1102,7 @@ class MainActivity : AppCompatActivity() {
         container.addView(TextView(this).apply { text = "Base URL"; setPadding(0, 16, 0, 0) }); container.addView(baseUrlInput)
         container.addView(TextView(this).apply { text = "接口"; setPadding(0, 16, 0, 0) }); container.addView(endpointInput)
         container.addView(TextView(this).apply { text = "API Key"; setPadding(0, 16, 0, 0) }); container.addView(keyInput)
-        container.addView(TextView(this).apply { text = "模型"; setPadding(0, 16, 0, 0) }); container.addView(modelInput); container.addView(hint)
+        container.addView(TextView(this).apply { text = "模型"; setPadding(0, 16, 0, 0) }); container.addView(modelInput); container.addView(modelHint); container.addView(hint)
         val dialog = AlertDialog.Builder(this).setTitle(if (existing == null) "新增 API 配置" else "编辑 API 配置")
             .setView(ScrollView(this).apply { addView(container) }).setNegativeButton("取消", null)
             .setNeutralButton(if (existing == null) "" else "删除", null).setPositiveButton("保存", null).create()
@@ -1213,6 +1276,52 @@ class MainActivity : AppCompatActivity() {
     private fun deleteAiSessionFiles(session: AiSession) {
         session.originalFile.delete()
         session.resultFile?.delete()
+    }
+
+    /** 将会话状态持久化到本地（原图/结果图已存于 filesDir/ai_session，此处写元数据）。 */
+    private fun persistAiSession(stage: String, prompt: String, resultPath: String? = aiSession?.resultFile?.absolutePath) {
+        val session = aiSession ?: return
+        aiSessionStore.save(
+            AiSessionStore.Snapshot(
+                originalPath = session.originalFile.absolutePath,
+                captureTime = session.captureTime,
+                captureLocation = session.captureLocation,
+                prompt = prompt,
+                stage = stage,
+                resultPath = resultPath
+            )
+        )
+    }
+
+    /** 进程被杀后重开时，若有未完成的持久化会话则恢复界面（复用现有 stage 显示）。 */
+    private fun restoreAiSessionIfNeeded() {
+        val snapshot = aiSessionStore.load() ?: return
+        // 已处于 AI 会话中（本次启动即由拍摄进入）则不重复恢复。
+        if (aiSession != null) return
+        aiSession = AiSession(
+            originalFile = snapshot.originalFile,
+            captureTime = snapshot.captureTime,
+            captureLocation = snapshot.captureLocation,
+            resultFile = snapshot.resultFile
+        )
+        cameraMode = CameraMode.AI
+        when (snapshot.stage) {
+            "RESULT" -> {
+                aiPromptEditText.setText(snapshot.prompt)
+                aiPromptEditText.setSelection(aiPromptEditText.text.length)
+                showAiResultStage()
+            }
+            else -> {
+                // PROMPT 或 GENERATING（生成未完成）：恢复提示词页，回填上次编辑的提示词。
+                val prompt = snapshot.prompt.ifBlank { aiSettingsStore.load().defaultPrompt }.toString()
+                aiPromptEditText.setText(prompt)
+                aiPromptEditText.setSelection(aiPromptEditText.text.length)
+                if (snapshot.stage == "GENERATING") {
+                    toast("上次 AI 生成未完成（应用已被关闭），已为你保留原图，可重新生成")
+                }
+                showAiPromptStage()
+            }
+        }
     }
 
     private fun hideKeyboard() {
@@ -1547,7 +1656,7 @@ class MainActivity : AppCompatActivity() {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                 try {
                     if (captureModeAtShutter == CameraMode.AI) {
-                        val clean = File.createTempFile("miku_ai_original_", ".jpg", cacheDir)
+                        val clean = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                         PhotoComposer.prepareCleanPhoto(file, spec, clean)
                         val session = AiSession(
                             originalFile = clean,
@@ -1562,6 +1671,7 @@ class MainActivity : AppCompatActivity() {
                             aiSession?.let(::deleteAiSessionFiles)
                             aiSession = session
                             captureButton.isEnabled = true
+                            persistAiSession(stage = "PROMPT", prompt = aiSettingsStore.load().defaultPrompt)
                             showAiPromptStage(resetPrompt = true)
                         }
                     } else {
@@ -1986,7 +2096,8 @@ class MainActivity : AppCompatActivity() {
         aiGenerationId++
         aiImageClient.cancel()
         aiExecutor.shutdownNow()
-        aiSession?.let(::deleteAiSessionFiles)
+        // AI 会话文件由用户明确保存、重拍或放弃时清理。Activity 被系统销毁后，
+        // restoreAiSessionIfNeeded() 需要这些文件来恢复提示词页或结果页。
         aiSession = null
         cameraExecutor.shutdown()
         super.onDestroy()

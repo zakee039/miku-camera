@@ -1,7 +1,5 @@
 # miku camera
 
-[Buy me a coffee](https://ifdian.net/a/zakee/plan)
-
 一款以 **Miku** 为主角的原生 Android 相机，由 [zakee](https://zakee.fun) 开发。围绕“让 Miku 进入现实照片”设计的拍摄体验。
 
 [个人主页](https://zakee.fun) · [Buy me a coffee](https://ifdian.net/a/zakee/plan)

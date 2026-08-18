@@ -6,7 +6,7 @@
 
 [个人主页](https://zakee.fun) · [Buy me a coffee](https://ifdian.net/a/zakee/plan)
 
-当前版本：`1.5.0`（`versionCode 12`）
+当前版本：`1.5.1`（`versionCode 13`）
 
 ## 关于 miku camera
 
@@ -56,8 +56,8 @@ AI mode 沿用普通模式的取景范围、方向处理、前置镜像与相机
 生成文件：
 
 ```text
-app/build/outputs/apk/debug/miku-camera-1.5.0.apk
-app/build/outputs/apk/release/miku-camera-1.5.0.apk
+app/build/outputs/apk/debug/miku-camera-1.5.1.apk
+app/build/outputs/apk/release/miku-camera-1.5.1.apk
 ```
 
 本地构建使用未纳入 Git 的 `app/miku-camera-signing.keystore` 固定签名。请妥善保存该文件；相同包名的后续版本必须使用同一签名才能覆盖安装。

@@ -22,7 +22,8 @@ class AiSessionStore(context: Context) {
         val captureLocation: String,
         val prompt: String,
         val stage: String, // PROMPT / GENERATING / RESULT
-        val resultPath: String?
+        val resultPath: String?,
+        val resultSaved: Boolean = false
     ) {
         val originalFile get() = File(originalPath)
         val resultFile get() = resultPath?.let { File(it) }
@@ -36,6 +37,7 @@ class AiSessionStore(context: Context) {
             put("prompt", snapshot.prompt)
             put("stage", snapshot.stage)
             put("resultPath", snapshot.resultPath ?: "")
+            put("resultSaved", snapshot.resultSaved)
         }.toString()).apply()
     }
 
@@ -57,7 +59,8 @@ class AiSessionStore(context: Context) {
                 captureLocation = json.optString("captureLocation", ""),
                 prompt = json.optString("prompt", ""),
                 stage = "PROMPT",
-                resultPath = null
+                resultPath = null,
+                resultSaved = false
             )
         }
         var stage = json.optString("stage", "PROMPT")
@@ -68,7 +71,8 @@ class AiSessionStore(context: Context) {
             captureLocation = json.optString("captureLocation", ""),
             prompt = json.optString("prompt", ""),
             stage = stage,
-            resultPath = resultPath
+            resultPath = resultPath,
+            resultSaved = json.optBoolean("resultSaved", false)
         )
     }.getOrNull()
 

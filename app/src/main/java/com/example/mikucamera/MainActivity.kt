@@ -97,7 +97,8 @@ class MainActivity : AppCompatActivity() {
         val originalFile: File,
         val captureTime: String,
         val captureLocation: String,
-        var resultFile: File? = null
+        var resultFile: File? = null,
+        var resultSaved: Boolean = false
     )
 
     private lateinit var root: View
@@ -136,6 +137,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiPromptPanel: View
     private lateinit var aiGeneratingPanel: View
     private lateinit var aiResultPanel: View
+    private lateinit var aiResultSaveActions: View
+    private lateinit var aiResultActions: View
+    private lateinit var aiResultPostSaveActions: View
     private lateinit var aiOriginalPreview: ImageView
     private lateinit var aiResultPreview: ImageView
     private lateinit var aiPromptEditText: EditText
@@ -302,6 +306,9 @@ class MainActivity : AppCompatActivity() {
         aiPromptPanel = findViewById(R.id.aiPromptPanel)
         aiGeneratingPanel = findViewById(R.id.aiGeneratingPanel)
         aiResultPanel = findViewById(R.id.aiResultPanel)
+        aiResultSaveActions = findViewById(R.id.aiResultSaveActions)
+        aiResultActions = findViewById(R.id.aiResultActions)
+        aiResultPostSaveActions = findViewById(R.id.aiResultPostSaveActions)
         aiOriginalPreview = findViewById(R.id.aiOriginalPreview)
         aiResultPreview = findViewById(R.id.aiResultPreview)
         aiPromptEditText = findViewById(R.id.aiPromptEditText)
@@ -492,6 +499,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.aiCancelGenerationButton).setOnClickListener { cancelAiGeneration() }
         findViewById<MaterialButton>(R.id.aiEditPromptButton).setOnClickListener { showAiPromptStage() }
         findViewById<MaterialButton>(R.id.aiRegenerateButton).setOnClickListener { confirmRegenerate() }
+        findViewById<MaterialButton>(R.id.aiSavedRetakeButton).setOnClickListener { returnToAiCapture() }
+        findViewById<MaterialButton>(R.id.aiSavedEditPromptButton).setOnClickListener { showAiPromptStage() }
         findViewById<MaterialButton>(R.id.aiSaveResultButton).setOnClickListener { saveAiSelection(saveOriginal = false, saveResult = true) }
         findViewById<MaterialButton>(R.id.aiSaveOriginalButton).setOnClickListener { saveAiSelection(saveOriginal = true, saveResult = false) }
         findViewById<MaterialButton>(R.id.aiSaveBothButton).setOnClickListener { saveAiSelection(saveOriginal = true, saveResult = true) }
@@ -658,6 +667,7 @@ class MainActivity : AppCompatActivity() {
         updateAiWorkflow(AiStage.GENERATING)
         session.resultFile?.delete()
         session.resultFile = null
+        session.resultSaved = false
         persistAiSession(stage = "GENERATING", prompt = aiPromptEditText.text.toString())
         val destination = aiSessionStore.newFile("miku_ai_result_", ".jpg")
         aiExecutor.execute {
@@ -735,6 +745,7 @@ class MainActivity : AppCompatActivity() {
         aiPageSettingsButton.alpha = 1f
         aiResultPreview.setImageURI(null)
         aiResultPreview.setImageURI(Uri.fromFile(result))
+        updateAiResultActions()
         updateAiWorkflow(AiStage.RESULT)
         persistAiSession(stage = "RESULT", prompt = aiPromptEditText.text.toString(), resultPath = result.absolutePath)
     }
@@ -769,6 +780,9 @@ class MainActivity : AppCompatActivity() {
         val session = aiSession ?: return toast("没有可保存的照片")
         if (saveResult && session.resultFile == null) return toast("AI 图片尚未生成")
         setAiResultButtonsEnabled(false)
+        aiPageBackButton.isEnabled = false
+        aiPageSettingsButton.isEnabled = false
+        aiPageSettingsButton.alpha = 0.4f
         aiExecutor.execute {
             try {
                 var latest: Uri? = null
@@ -786,17 +800,26 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
                 runOnUiThread {
+                    session.resultSaved = true
                     updateRecentPhoto(latest)
+                    persistAiSession(stage = "RESULT", prompt = aiPromptEditText.text.toString(), resultPath = session.resultFile?.absolutePath)
+                    updateAiResultActions()
+                    setAiResultButtonsEnabled(true)
+                    aiPageBackButton.isEnabled = true
+                    aiPageSettingsButton.isEnabled = true
+                    aiPageSettingsButton.alpha = 1f
                     toast(when {
                         saveOriginal && saveResult -> "原图和 AI 图片已保存"
                         saveOriginal -> "原图已保存"
                         else -> "AI 图片已保存"
                     })
-                    exitAiMode(deleteSession = true)
                 }
             } catch (error: Throwable) {
                 runOnUiThread {
                     setAiResultButtonsEnabled(true)
+                    aiPageBackButton.isEnabled = true
+                    aiPageSettingsButton.isEnabled = true
+                    aiPageSettingsButton.alpha = 1f
                     toast("保存失败: ${error.message ?: "未知错误"}")
                 }
             }
@@ -806,8 +829,16 @@ class MainActivity : AppCompatActivity() {
     private fun setAiResultButtonsEnabled(enabled: Boolean) {
         listOf(
             R.id.aiSaveResultButton, R.id.aiSaveOriginalButton, R.id.aiSaveBothButton,
-            R.id.aiEditPromptButton, R.id.aiRegenerateButton
+            R.id.aiEditPromptButton, R.id.aiRegenerateButton,
+            R.id.aiSavedRetakeButton, R.id.aiSavedEditPromptButton
         ).forEach { findViewById<View>(it).isEnabled = enabled }
+    }
+
+    private fun updateAiResultActions() {
+        val saved = aiSession?.resultSaved == true
+        aiResultSaveActions.visibility = if (saved) View.GONE else View.VISIBLE
+        aiResultActions.visibility = if (saved) View.GONE else View.VISIBLE
+        aiResultPostSaveActions.visibility = if (saved) View.VISIBLE else View.GONE
     }
 
     private fun requestExitAiMode() {
@@ -823,13 +854,22 @@ class MainActivity : AppCompatActivity() {
                     exitAiMode(deleteSession = true)
                 }
                 .show()
-            else -> AlertDialog.Builder(this)
-                .setTitle("退出 AI mode")
-                .setMessage("当前照片尚未保存，确定放弃并退出吗？")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("放弃") { _, _ -> exitAiMode(deleteSession = true) }
-                .show()
+            AiStage.RESULT -> if (aiSession?.resultSaved == true) {
+                exitAiMode(deleteSession = true)
+            } else {
+                confirmExitAiModeWithUnsavedPhoto()
+            }
+            AiStage.PROMPT -> confirmExitAiModeWithUnsavedPhoto()
         }
+    }
+
+    private fun confirmExitAiModeWithUnsavedPhoto() {
+        AlertDialog.Builder(this)
+            .setTitle("退出 AI mode")
+            .setMessage("当前照片尚未保存，确定放弃并退出吗？")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("放弃") { _, _ -> exitAiMode(deleteSession = true) }
+            .show()
     }
 
     private fun exitAiMode(deleteSession: Boolean) {
@@ -1288,7 +1328,8 @@ class MainActivity : AppCompatActivity() {
                 captureLocation = session.captureLocation,
                 prompt = prompt,
                 stage = stage,
-                resultPath = resultPath
+                resultPath = resultPath,
+                resultSaved = session.resultSaved
             )
         )
     }
@@ -1302,7 +1343,8 @@ class MainActivity : AppCompatActivity() {
             originalFile = snapshot.originalFile,
             captureTime = snapshot.captureTime,
             captureLocation = snapshot.captureLocation,
-            resultFile = snapshot.resultFile
+            resultFile = snapshot.resultFile,
+            resultSaved = snapshot.resultSaved
         )
         cameraMode = CameraMode.AI
         when (snapshot.stage) {

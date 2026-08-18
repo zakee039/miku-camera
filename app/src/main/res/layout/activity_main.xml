@@ -781,6 +781,7 @@
                             android:textSize="12sp" />
 
                         <LinearLayout
+                            android:id="@+id/aiResultSaveActions"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="horizontal">
@@ -816,6 +817,7 @@
                         </LinearLayout>
 
                         <LinearLayout
+                            android:id="@+id/aiResultActions"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:gravity="center"
@@ -837,6 +839,34 @@
                                 android:layout_height="40dp"
                                 android:text="重新生成"
                                 android:textColor="@color/accent"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/aiResultPostSaveActions"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiSavedRetakeButton"
+                                style="@style/Widget.Material3.Button.TonalButton"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_weight="1"
+                                android:text="重新拍摄"
+                                android:textSize="12sp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiSavedEditPromptButton"
+                                style="@style/Widget.Material3.Button"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="8dp"
+                                android:layout_weight="1"
+                                android:text="修改提示词"
                                 android:textSize="12sp" />
                         </LinearLayout>
                     </LinearLayout>

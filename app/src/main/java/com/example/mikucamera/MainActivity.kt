@@ -7,6 +7,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContentUris
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -20,6 +22,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import android.text.InputType
 import android.util.Rational
 import android.util.TypedValue
@@ -63,7 +66,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.example.mikucamera.camera.PhotoComposer
 import com.example.mikucamera.ai.AiImageClient
 import com.example.mikucamera.ai.AiImageException
+import com.example.mikucamera.ai.AiGenerationService
 import com.example.mikucamera.ai.AiSessionStore
+import com.example.mikucamera.ai.AiTransaction
+import com.example.mikucamera.ai.AiTransactionState
+import com.example.mikucamera.ai.AiTransactionStore
 import com.example.mikucamera.ai.AiApiProfile
 import com.example.mikucamera.ai.AiPromptBuilder
 import com.example.mikucamera.ai.AiOutfitStyle
@@ -75,6 +82,7 @@ import com.example.mikucamera.location.LocationFormatter
 import com.example.mikucamera.location.LocationProvider
 import com.example.mikucamera.model.WatermarkPreset
 import com.example.mikucamera.ui.FocusExposureView
+import com.example.mikucamera.ui.AiOverlayService
 import com.example.mikucamera.ui.WatermarkOverlayView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
@@ -95,10 +103,11 @@ class MainActivity : AppCompatActivity() {
 
     private data class AiSession(
         val originalFile: File,
-        val captureTime: String,
-        val captureLocation: String,
+        var captureTime: String,
+        var captureLocation: String,
         var resultFile: File? = null,
-        var resultSaved: Boolean = false
+        var resultSaved: Boolean = false,
+        var transactionId: String? = null
     )
 
     private lateinit var root: View
@@ -125,6 +134,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiCaptureProgressBar: View
     private lateinit var locationStatusView: TextView
     private lateinit var recentPhotoView: ImageView
+    private lateinit var aiImportButton: MaterialButton
     private lateinit var timeSwitch: SwitchMaterial
     private lateinit var locationSwitch: SwitchMaterial
     private lateinit var streetSwitch: SwitchMaterial
@@ -144,6 +154,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiResultPreview: ImageView
     private lateinit var aiPromptEditText: EditText
     private lateinit var aiMetadataText: TextView
+    private lateinit var aiTimeEditText: TextView
+    private lateinit var aiLocationEditText: TextView
     private lateinit var aiTimeWatermarkSwitch: SwitchMaterial
     private lateinit var aiLocationWatermarkSwitch: SwitchMaterial
     private lateinit var aiGenerationStatusText: TextView
@@ -158,6 +170,7 @@ class MainActivity : AppCompatActivity() {
     private val locationProvider by lazy { LocationProvider(this) }
     private val aiSettingsStore by lazy { AiSettingsStore(this) }
     private val aiSessionStore by lazy { AiSessionStore(this) }
+    private val aiTransactionStore by lazy { AiTransactionStore(this) }
     private val aiImageClient = AiImageClient()
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val aiExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -181,6 +194,13 @@ class MainActivity : AppCompatActivity() {
     private var aiSession: AiSession? = null
     @Volatile private var aiGenerationId = 0L
     private var lastAiDebugLog = ""
+    private var overlayPromptShown = false
+    private var locationPermissionRequested = false
+    private var cameraPermissionRequested = false
+    private var photoPermissionRequested = false
+    private val transactionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) { refreshVisibleTransaction() }
+    }
     private val density by lazy { resources.displayMetrics.density }
     private val touchSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop }
 
@@ -212,7 +232,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        if (grants[Manifest.permission.CAMERA] == true) startCamera() else toast("需要相机权限才能拍照")
+        if (grants[Manifest.permission.CAMERA] != true) toast("需要相机权限才能拍照")
+        continuePermissionSequence()
     }
     private val locationPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         // GPS is independent of the watermark "地点" display switch.
@@ -221,6 +242,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             toast("未授予定位权限，地点水印可能无法显示地址")
         }
+        continuePermissionSequence()
+    }
+    private val photoPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        continuePermissionSequence()
     }
     private val pngPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
@@ -251,10 +276,10 @@ class MainActivity : AppCompatActivity() {
         installBundledMikuPreset()
         restoreLastSelectedPreset()
         loadLatestPhoto()
-        // Warm up GPS as soon as the camera opens so location is ready when needed.
-        startLocationWarmup()
-        if (!hasCameraPermission()) cameraPermission.launch(requiredCameraPermissions()) else startCamera()
         restoreAiSessionIfNeeded()
+        continuePermissionSequence()
+        AiOverlayService.refresh(this)
+        intent.getStringExtra(EXTRA_AI_TRANSACTION_ID)?.let(::openAiTransaction)
     }
 
     /** Immersive camera UI: status bar hidden so the viewfinder is not framed by system chrome. */
@@ -295,6 +320,7 @@ class MainActivity : AppCompatActivity() {
         // Keep marquee running in the middle slot (never steals width from side buttons).
         locationStatusView.isSelected = true
         recentPhotoView = findViewById(R.id.recentPhotoView)
+        aiImportButton = findViewById(R.id.aiImportButton)
         timeSwitch = findViewById(R.id.timeSwitch)
         locationSwitch = findViewById(R.id.locationSwitch)
         streetSwitch = findViewById(R.id.streetSwitch)
@@ -313,6 +339,8 @@ class MainActivity : AppCompatActivity() {
         aiResultPreview = findViewById(R.id.aiResultPreview)
         aiPromptEditText = findViewById(R.id.aiPromptEditText)
         aiMetadataText = findViewById(R.id.aiMetadataText)
+        aiTimeEditText = findViewById(R.id.aiTimeEditText)
+        aiLocationEditText = findViewById(R.id.aiLocationEditText)
         aiTimeWatermarkSwitch = findViewById(R.id.aiTimeWatermarkSwitch)
         aiLocationWatermarkSwitch = findViewById(R.id.aiLocationWatermarkSwitch)
         aiGenerationStatusText = findViewById(R.id.aiGenerationStatusText)
@@ -456,8 +484,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         hideStatusBar()
         orientationListener.enable()
-        // Keep GPS warm whenever the camera UI is active.
-        startLocationWarmup()
+        if (overlayPromptShown) continuePermissionSequence()
+        if (hasLocationPermission()) startLocationWarmup()
+        refreshVisibleTransaction()
     }
 
     override fun onPause() {
@@ -486,6 +515,11 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
         captureButton.setOnClickListener { capturePhoto() }
+        aiImportButton.setOnClickListener {
+            aiPhotoPicker.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
         recentPhotoView.setOnClickListener { openRecentPhoto() }
         selectWatermarkButton.setOnClickListener { showWatermarkChooser() }
         aiModeButton.setOnClickListener { requestEnterAiMode() }
@@ -497,6 +531,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.aiRetakeButton).setOnClickListener { returnToAiCapture() }
         findViewById<MaterialButton>(R.id.aiGenerateButton).setOnClickListener { startAiGeneration() }
         findViewById<MaterialButton>(R.id.aiCancelGenerationButton).setOnClickListener { cancelAiGeneration() }
+        findViewById<MaterialButton>(R.id.aiBackgroundGenerationButton).setOnClickListener { moveGenerationToBackground() }
         findViewById<MaterialButton>(R.id.aiEditPromptButton).setOnClickListener { showAiPromptStage() }
         findViewById<MaterialButton>(R.id.aiRegenerateButton).setOnClickListener { confirmRegenerate() }
         findViewById<MaterialButton>(R.id.aiSavedRetakeButton).setOnClickListener { returnToAiCapture() }
@@ -514,6 +549,8 @@ class MainActivity : AppCompatActivity() {
                 else -> true
             }
         }
+        aiTimeEditText.setOnClickListener { editAiMetadata(time = true) }
+        aiLocationEditText.setOnClickListener { editAiMetadata(time = false) }
         findViewById<MaterialButton>(R.id.uploadButton).setOnClickListener {
             pngPicker.launch(arrayOf("image/png"))
         }
@@ -589,6 +626,7 @@ class MainActivity : AppCompatActivity() {
         locationStatusView.visibility = View.VISIBLE
         flashButton.visibility = View.VISIBLE
         recentPhotoView.visibility = View.INVISIBLE
+        aiImportButton.visibility = View.VISIBLE
         overlay.visibility = View.GONE
         overlay.setEditingEnabled(false)
         updateAiWorkflow(AiStage.CAPTURE)
@@ -645,89 +683,27 @@ class MainActivity : AppCompatActivity() {
             showAiSettingsHome()
             return
         }
-        val prompt = AiPromptBuilder.build(
-            userPrompt = aiPromptEditText.text.toString().trim(),
-            captureTime = session.captureTime,
-            captureLocation = session.captureLocation,
-            visualStyle = settings.visualStyle,
-            outfitStyle = settings.outfitStyle,
-            includeTimeWatermark = aiTimeWatermarkSwitch.isChecked,
-            includeLocationWatermark = aiLocationWatermarkSwitch.isChecked
-        )
-        hideKeyboard()
-        aiStage = AiStage.GENERATING
-        aiCaptureProgressBar.visibility = View.GONE
-        val generationId = ++aiGenerationId
-        aiPromptPanel.visibility = View.GONE
-        aiResultPanel.visibility = View.GONE
-        aiGeneratingPanel.visibility = View.VISIBLE
-        aiGenerationStatusText.text = "正在准备干净照片"
-        aiPageSettingsButton.isEnabled = false
-        aiPageSettingsButton.alpha = 0.4f
-        updateAiWorkflow(AiStage.GENERATING)
+        val taskId = ensureAiTransaction(session)
+        aiTransactionStore.update(taskId) {
+            it.copy(
+                captureTime = session.captureTime,
+                captureLocation = session.captureLocation,
+                prompt = aiPromptEditText.text.toString().trim(),
+                includeTimeWatermark = aiTimeWatermarkSwitch.isChecked,
+                includeLocationWatermark = aiLocationWatermarkSwitch.isChecked,
+                state = AiTransactionState.RUNNING,
+                message = "正在处理中",
+                resultPath = null,
+                resultSaved = false
+            )
+        }
         session.resultFile?.delete()
         session.resultFile = null
         session.resultSaved = false
         persistAiSession(stage = "GENERATING", prompt = aiPromptEditText.text.toString())
-        val destination = aiSessionStore.newFile("miku_ai_result_", ".jpg")
-        aiExecutor.execute {
-            try {
-                aiImageClient.createEdit(
-                    baseUrl = settings.baseUrl,
-                    endpointPath = profile.endpoint,
-                    apiKey = settings.apiKey,
-                    model = settings.model,
-                    visualStyle = settings.visualStyle,
-                    outfitStyle = settings.outfitStyle,
-                    source = session.originalFile,
-                    prompt = prompt,
-                    destination = destination,
-                    onProgress = { status ->
-                        runOnUiThread {
-                            if (generationId == aiGenerationId && aiStage == AiStage.GENERATING) {
-                                aiGenerationStatusText.text = status
-                            }
-                        }
-                    },
-                    useGenerationsProtocol = profile.preset.useGenerationsProtocol,
-                    useGeminiProtocol = profile.preset.useGeminiProtocol,
-                    useQwenProtocol = profile.preset.useQwenProtocol
-                )
-                if (generationId != aiGenerationId) {
-                    destination.delete()
-                    return@execute
-                }
-                session.resultFile = destination
-                runOnUiThread { showAiResultStage() }
-            } catch (error: Throwable) {
-                destination.delete()
-                if (generationId == aiGenerationId) {
-                    runOnUiThread {
-                        lastAiDebugLog = (error as? AiImageException)?.debugLog
-                            ?: buildFallbackAiLog(
-                                settings.baseUrl,
-                                profile.endpoint,
-                                settings.model,
-                                settings.visualStyle,
-                                settings.outfitStyle,
-                                error
-                            )
-                        aiPageSettingsButton.isEnabled = true
-                        aiPageSettingsButton.alpha = 1f
-                        showAiPromptStage()
-                        AlertDialog.Builder(this)
-                            .setTitle("AI 生成失败")
-                            .setMessage(error.message ?: "未知错误，原图仍然保留")
-                            .setNegativeButton("留在提示词页面", null)
-                            .setNeutralButton("查看日志") { _, _ -> showAiDebugLog(lastAiDebugLog) }
-                            .setPositiveButton("仅保存原图") { _, _ ->
-                                saveAiSelection(saveOriginal = true, saveResult = false)
-                            }
-                            .show()
-                    }
-                }
-            }
-        }
+        showAiGeneratingStage()
+        AiGenerationService.start(this, taskId)
+        AiOverlayService.refresh(this)
     }
 
     private fun showAiResultStage() {
@@ -753,6 +729,7 @@ class MainActivity : AppCompatActivity() {
     private fun cancelAiGeneration() {
         aiGenerationId++
         aiImageClient.cancel()
+        aiSession?.transactionId?.let { AiGenerationService.cancel(this, it) }
         aiPageSettingsButton.isEnabled = true
         aiPageSettingsButton.alpha = 1f
         showAiPromptStage()
@@ -769,9 +746,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun returnToAiCapture() {
-        aiSession?.let(::deleteAiSessionFiles)
+        aiSession?.let { session ->
+            session.transactionId?.let { aiTransactionStore.remove(it) }
+            deleteAiSessionFiles(session)
+        }
         aiSessionStore.clear()
         aiSession = null
+        AiOverlayService.refresh(this)
         aiPromptEditText.text?.clear()
         enterAiCaptureStage()
     }
@@ -801,6 +782,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 runOnUiThread {
                     session.resultSaved = true
+                    session.transactionId?.let { id ->
+                        aiTransactionStore.update(id) { task -> task.copy(resultSaved = true) }
+                        AiOverlayService.refresh(this@MainActivity)
+                    }
                     updateRecentPhoto(latest)
                     persistAiSession(stage = "RESULT", prompt = aiPromptEditText.text.toString(), resultPath = session.resultFile?.absolutePath)
                     updateAiResultActions()
@@ -832,6 +817,91 @@ class MainActivity : AppCompatActivity() {
             R.id.aiEditPromptButton, R.id.aiRegenerateButton,
             R.id.aiSavedRetakeButton, R.id.aiSavedEditPromptButton
         ).forEach { findViewById<View>(it).isEnabled = enabled }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(this, transactionReceiver, IntentFilter(AiTransactionStore.ACTION_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    override fun onStop() {
+        unregisterReceiver(transactionReceiver)
+        super.onStop()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_AI_TRANSACTION_ID)?.let(::openAiTransaction)
+    }
+
+    private fun showAiGeneratingStage() {
+        hideKeyboard()
+        aiStage = AiStage.GENERATING
+        aiCaptureProgressBar.visibility = View.GONE
+        // A running transaction can be reopened from the overlay while the normal
+        // camera is visible. Bring the full AI page forward, just like the result page.
+        camera?.cameraControl?.enableTorch(false)
+        cameraProvider?.unbindAll()
+        camera = null
+        imageCapture = null
+        aiPageHost.visibility = View.VISIBLE
+        viewfinderHost.visibility = View.GONE
+        bottomChrome.visibility = View.GONE
+        cameraControls.visibility = View.GONE
+        aiPromptPanel.visibility = View.GONE
+        aiResultPanel.visibility = View.GONE
+        aiGeneratingPanel.visibility = View.VISIBLE
+        aiGenerationStatusText.text = "正在后台准备照片"
+        aiPageSettingsButton.isEnabled = false
+        aiPageSettingsButton.alpha = 0.4f
+        updateAiWorkflow(AiStage.GENERATING)
+    }
+
+    private fun ensureAiTransaction(session: AiSession): String {
+        session.transactionId?.let { return it }
+        val settings = aiSettingsStore.load()
+        return aiTransactionStore.create(
+            AiTransaction(
+                originalPath = session.originalFile.absolutePath,
+                captureTime = session.captureTime,
+                captureLocation = session.captureLocation,
+                prompt = aiPromptEditText.text.toString().ifBlank { settings.defaultPrompt },
+                includeTimeWatermark = aiTimeWatermarkSwitch.isChecked,
+                includeLocationWatermark = aiLocationWatermarkSwitch.isChecked
+            )
+        ).id.also { session.transactionId = it }
+    }
+
+    private fun updateTransactionFromCurrentSession() {
+        val session = aiSession ?: return
+        val id = ensureAiTransaction(session)
+        aiTransactionStore.update(id) {
+            it.copy(
+                captureTime = session.captureTime,
+                captureLocation = session.captureLocation,
+                prompt = aiPromptEditText.text.toString().trim(),
+                includeTimeWatermark = aiTimeWatermarkSwitch.isChecked,
+                includeLocationWatermark = aiLocationWatermarkSwitch.isChecked
+            )
+        }
+        AiOverlayService.refresh(this)
+    }
+
+    private fun moveGenerationToBackground() {
+        val session = aiSession ?: return
+        ensureAiTransaction(session)
+        updateTransactionFromCurrentSession()
+        AiOverlayService.refresh(this)
+        aiSessionStore.clear(deleteFiles = false)
+        aiSession = null
+        aiPromptEditText.text?.clear()
+        enterAiCaptureStage()
+        toast("已转入后台处理")
+    }
+    private val aiPhotoPicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@registerForActivityResult
+        importAiPhoto(uri)
     }
 
     private fun updateAiResultActions() {
@@ -875,8 +945,12 @@ class MainActivity : AppCompatActivity() {
     private fun exitAiMode(deleteSession: Boolean) {
         hideKeyboard()
         if (deleteSession) {
-            aiSession?.let(::deleteAiSessionFiles)
+            aiSession?.let { session ->
+                session.transactionId?.let { aiTransactionStore.remove(it) }
+                deleteAiSessionFiles(session)
+            }
             aiSessionStore.clear()
+            AiOverlayService.refresh(this)
         }
         aiSession = null
         aiGenerationId++
@@ -893,6 +967,7 @@ class MainActivity : AppCompatActivity() {
         aiCaptureProgressBar.visibility = View.GONE
         flashButton.visibility = View.VISIBLE
         recentPhotoView.visibility = View.VISIBLE
+        aiImportButton.visibility = View.GONE
         overlay.visibility = View.VISIBLE
         setAiResultButtonsEnabled(true)
         root.post {
@@ -1243,11 +1318,26 @@ class MainActivity : AppCompatActivity() {
         if (!::aiMetadataText.isInitialized) return
         val session = aiSession ?: return
         val settings = aiSettingsStore.load()
-        aiMetadataText.text =
-            "时间：${session.captureTime}\n" +
-                "地点：${session.captureLocation.ifBlank { "未获取到地点，AI 将按未知地点处理" }}\n" +
-                "形象：${settings.visualStyle.displayName}\n" +
+        aiTimeEditText.text = "时间：${session.captureTime}  ✎"
+        aiLocationEditText.text = "地点：${session.captureLocation.ifBlank { "未获取到地点" }}  ✎"
+        aiMetadataText.text = "形象：${settings.visualStyle.displayName}\n" +
                 "服装：${settings.outfitStyle.displayName}"
+    }
+
+    private fun editAiMetadata(time: Boolean) {
+        val session = aiSession ?: return
+        val input = EditText(this).apply { setText(if (time) session.captureTime else session.captureLocation) }
+        AlertDialog.Builder(this)
+            .setTitle(if (time) "编辑拍摄时间" else "编辑拍摄地点")
+            .setView(input)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确定") { _, _ ->
+                if (time) session.captureTime = input.text.toString().trim() else session.captureLocation = input.text.toString().trim()
+                updateAiMetadataLabel()
+                updateTransactionFromCurrentSession()
+                persistAiSession("PROMPT", aiPromptEditText.text.toString())
+            }
+            .show()
     }
 
     private fun showAiDebugLog(log: String) {
@@ -1329,7 +1419,8 @@ class MainActivity : AppCompatActivity() {
                 prompt = prompt,
                 stage = stage,
                 resultPath = resultPath,
-                resultSaved = session.resultSaved
+                resultSaved = session.resultSaved,
+                transactionId = session.transactionId
             )
         )
     }
@@ -1344,7 +1435,8 @@ class MainActivity : AppCompatActivity() {
             captureTime = snapshot.captureTime,
             captureLocation = snapshot.captureLocation,
             resultFile = snapshot.resultFile,
-            resultSaved = snapshot.resultSaved
+            resultSaved = snapshot.resultSaved,
+            transactionId = snapshot.transactionId
         )
         cameraMode = CameraMode.AI
         when (snapshot.stage) {
@@ -1387,6 +1479,109 @@ class MainActivity : AppCompatActivity() {
             locationPermission.launch(
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
+        }
+    }
+
+    private fun continuePermissionSequence() {
+        when {
+            !hasLocationPermission() && !locationPermissionRequested -> {
+                locationPermissionRequested = true
+                locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }
+            !hasCameraPermission() && !cameraPermissionRequested -> {
+                cameraPermissionRequested = true
+                cameraPermission.launch(requiredCameraPermissions())
+            }
+            !hasPhotoPermission() && !photoPermissionRequested -> {
+                photoPermissionRequested = true
+                photoPermission.launch(photoPermissionName())
+            }
+            !Settings.canDrawOverlays(this) && !overlayPromptShown -> {
+                overlayPromptShown = true
+                AlertDialog.Builder(this)
+                    .setTitle("开启悬浮窗功能")
+                    .setMessage("AI 事务可在后台继续处理。开启悬浮窗后可随时查看进行中、成功和失败的任务。")
+                    .setNegativeButton("暂不") { _, _ -> startCamera(); startLocationWarmup() }
+                    .setPositiveButton("去开启") { _, _ ->
+                        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                    }
+                    .show()
+            }
+            else -> {
+                if (hasCameraPermission()) startCamera()
+                if (hasLocationPermission()) startLocationWarmup()
+                AiOverlayService.refresh(this)
+            }
+        }
+    }
+
+    private fun scheduleAiOverlayRefresh(delayMillis: Long = 450L) {
+        root.postDelayed({
+            if (!isFinishing && !isDestroyed) {
+                runCatching { AiOverlayService.refresh(applicationContext) }
+            }
+        }, delayMillis)
+    }
+
+    private fun hasPhotoPermission(): Boolean = ContextCompat.checkSelfPermission(this, photoPermissionName()) == PackageManager.PERMISSION_GRANTED
+    private fun photoPermissionName(): String = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+
+    private fun importAiPhoto(uri: Uri) {
+        if (cameraMode != CameraMode.AI) return
+        captureButton.isEnabled = false
+        cameraExecutor.execute {
+            try {
+                val imported = aiSessionStore.newFile("miku_ai_original_", ".jpg")
+                contentResolver.openInputStream(uri)?.use { input -> imported.outputStream().use { input.copyTo(it) } }
+                    ?: throw IllegalArgumentException("无法读取照片")
+                val time = formatAiCaptureTime()
+                val location = formatLocationLabel(includePoi = true).orEmpty()
+                val settings = aiSettingsStore.load()
+                val task = aiTransactionStore.create(AiTransaction(
+                    originalPath = imported.absolutePath, captureTime = time, captureLocation = location,
+                    prompt = settings.defaultPrompt, includeTimeWatermark = settings.includeTimeWatermark,
+                    includeLocationWatermark = settings.includeLocationWatermark
+                ))
+                runOnUiThread {
+                    aiSession?.let { old -> old.transactionId?.let { aiTransactionStore.remove(it) }; deleteAiSessionFiles(old) }
+                    aiSession = AiSession(imported, time, location, transactionId = task.id)
+                    persistAiSession("PROMPT", settings.defaultPrompt)
+                    AiOverlayService.refresh(this@MainActivity)
+                    captureButton.isEnabled = true
+                    showAiPromptStage(resetPrompt = true)
+                }
+            } catch (error: Throwable) {
+                runOnUiThread { captureButton.isEnabled = true; toast("导入失败: ${error.message ?: "未知错误"}") }
+            }
+        }
+    }
+
+    private fun openAiTransaction(id: String) {
+        val task = aiTransactionStore.get(id) ?: return toast("该事务已被清除")
+        aiSession = AiSession(task.originalFile, task.captureTime, task.captureLocation, task.resultFile, task.resultSaved, task.id)
+        cameraMode = CameraMode.AI
+        aiPromptEditText.setText(task.prompt)
+        aiTimeWatermarkSwitch.isChecked = task.includeTimeWatermark
+        aiLocationWatermarkSwitch.isChecked = task.includeLocationWatermark
+        when (task.state) {
+            AiTransactionState.SUCCESS -> showAiResultStage()
+            AiTransactionState.RUNNING -> showAiGeneratingStage()
+            AiTransactionState.FAILED -> { showAiPromptStage(); toast("上次生成失败：${task.message}") }
+        }
+    }
+
+    private fun refreshVisibleTransaction() {
+        val id = aiSession?.transactionId ?: return
+        val task = aiTransactionStore.get(id) ?: return
+        if (task.state == AiTransactionState.RUNNING && aiStage == AiStage.GENERATING) {
+            aiGenerationStatusText.text = task.message
+        } else if (task.state == AiTransactionState.SUCCESS && aiStage == AiStage.GENERATING) {
+            aiSession?.resultFile = task.resultFile
+            aiSession?.resultSaved = task.resultSaved
+            showAiResultStage()
+        } else if (task.state == AiTransactionState.FAILED && aiStage == AiStage.GENERATING) {
+            showAiPromptStage()
+            toast("AI 生成失败：${task.message}")
         }
     }
 
@@ -1700,21 +1895,35 @@ class MainActivity : AppCompatActivity() {
                     if (captureModeAtShutter == CameraMode.AI) {
                         val clean = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                         PhotoComposer.prepareCleanPhoto(file, spec, clean)
+                        val task = aiTransactionStore.create(AiTransaction(
+                            originalPath = clean.absolutePath,
+                            captureTime = aiCaptureTimeAtShutter,
+                            captureLocation = aiLocationAtShutter,
+                            prompt = aiSettingsStore.load().defaultPrompt,
+                            includeTimeWatermark = aiSettingsStore.load().includeTimeWatermark,
+                            includeLocationWatermark = aiSettingsStore.load().includeLocationWatermark
+                        ))
                         val session = AiSession(
                             originalFile = clean,
                             captureTime = aiCaptureTimeAtShutter,
-                            captureLocation = aiLocationAtShutter
+                            captureLocation = aiLocationAtShutter,
+                            transactionId = task.id
                         )
                         runOnUiThread {
                             if (cameraMode != CameraMode.AI) {
                                 deleteAiSessionFiles(session)
                                 return@runOnUiThread
                             }
-                            aiSession?.let(::deleteAiSessionFiles)
+                            aiSession?.let { previous ->
+                                previous.transactionId?.let { aiTransactionStore.remove(it) }
+                                deleteAiSessionFiles(previous)
+                            }
                             aiSession = session
                             captureButton.isEnabled = true
                             persistAiSession(stage = "PROMPT", prompt = aiSettingsStore.load().defaultPrompt)
                             showAiPromptStage(resetPrompt = true)
+                            // CameraX is still unwinding its callback. Delay system-window work.
+                            scheduleAiOverlayRefresh()
                         }
                     } else {
                         val uri = PhotoComposer.composeAndSave(this@MainActivity, file, spec)
@@ -2143,5 +2352,9 @@ class MainActivity : AppCompatActivity() {
         aiSession = null
         cameraExecutor.shutdown()
         super.onDestroy()
+    }
+
+    companion object {
+        const val EXTRA_AI_TRANSACTION_ID = "ai_transaction_id"
     }
 }

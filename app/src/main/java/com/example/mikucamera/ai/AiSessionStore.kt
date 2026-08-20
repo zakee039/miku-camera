@@ -23,7 +23,8 @@ class AiSessionStore(context: Context) {
         val prompt: String,
         val stage: String, // PROMPT / GENERATING / RESULT
         val resultPath: String?,
-        val resultSaved: Boolean = false
+        val resultSaved: Boolean = false,
+        val transactionId: String? = null
     ) {
         val originalFile get() = File(originalPath)
         val resultFile get() = resultPath?.let { File(it) }
@@ -38,6 +39,7 @@ class AiSessionStore(context: Context) {
             put("stage", snapshot.stage)
             put("resultPath", snapshot.resultPath ?: "")
             put("resultSaved", snapshot.resultSaved)
+            put("transactionId", snapshot.transactionId ?: "")
         }.toString()).apply()
     }
 
@@ -60,7 +62,8 @@ class AiSessionStore(context: Context) {
                 prompt = json.optString("prompt", ""),
                 stage = "PROMPT",
                 resultPath = null,
-                resultSaved = false
+                resultSaved = false,
+                transactionId = json.optString("transactionId").ifBlank { null }
             )
         }
         var stage = json.optString("stage", "PROMPT")
@@ -72,7 +75,8 @@ class AiSessionStore(context: Context) {
             prompt = json.optString("prompt", ""),
             stage = stage,
             resultPath = resultPath,
-            resultSaved = json.optBoolean("resultSaved", false)
+            resultSaved = json.optBoolean("resultSaved", false),
+            transactionId = json.optString("transactionId").ifBlank { null }
         )
     }.getOrNull()
 
@@ -80,9 +84,12 @@ class AiSessionStore(context: Context) {
     fun newFile(prefix: String, suffix: String): File =
         File.createTempFile(prefix, suffix, sessionDir)
 
-    fun clear() {
+    fun clear(deleteFiles: Boolean = true) {
+        if (deleteFiles) load()?.let { snapshot ->
+            snapshot.originalFile.delete()
+            snapshot.resultFile?.delete()
+        }
         prefs.edit().remove(KEY_SNAPSHOT).apply()
-        sessionDir.listFiles()?.forEach { it.delete() }
     }
 
     companion object {

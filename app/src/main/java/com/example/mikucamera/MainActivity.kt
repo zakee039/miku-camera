@@ -531,14 +531,15 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.aiRetakeButton).setOnClickListener { returnToAiCapture() }
         findViewById<MaterialButton>(R.id.aiGenerateButton).setOnClickListener { startAiGeneration() }
         findViewById<MaterialButton>(R.id.aiCancelGenerationButton).setOnClickListener { cancelAiGeneration() }
-        findViewById<MaterialButton>(R.id.aiBackgroundGenerationButton).setOnClickListener { moveGenerationToBackground() }
+        findViewById<MaterialButton>(R.id.aiEditPromptDuringGenerationButton).setOnClickListener { editPromptWhileGenerating() }
+        findViewById<MaterialButton>(R.id.aiRetakeDuringGenerationButton).setOnClickListener { retakeWhileGenerating() }
         findViewById<MaterialButton>(R.id.aiEditPromptButton).setOnClickListener { showAiPromptStage() }
         findViewById<MaterialButton>(R.id.aiRegenerateButton).setOnClickListener { confirmRegenerate() }
         findViewById<MaterialButton>(R.id.aiSavedRetakeButton).setOnClickListener { returnToAiCapture() }
         findViewById<MaterialButton>(R.id.aiSavedEditPromptButton).setOnClickListener { showAiPromptStage() }
-        findViewById<MaterialButton>(R.id.aiSaveResultButton).setOnClickListener { saveAiSelection(saveOriginal = false, saveResult = true) }
-        findViewById<MaterialButton>(R.id.aiSaveOriginalButton).setOnClickListener { saveAiSelection(saveOriginal = true, saveResult = false) }
-        findViewById<MaterialButton>(R.id.aiSaveBothButton).setOnClickListener { saveAiSelection(saveOriginal = true, saveResult = true) }
+        findViewById<MaterialButton>(R.id.aiSaveResultButton).setOnClickListener { editPromptFromResult() }
+        findViewById<MaterialButton>(R.id.aiSaveOriginalButton).setOnClickListener { returnToAiCapture() }
+        findViewById<MaterialButton>(R.id.aiSaveBothButton).setOnClickListener { saveAiSelection(saveOriginal = false, saveResult = true) }
         aiResultPreview.setOnTouchListener { _, event ->
             val session = aiSession ?: return@setOnTouchListener false
             when (event.actionMasked) {
@@ -736,6 +737,73 @@ class MainActivity : AppCompatActivity() {
         toast("已停止等待，原图仍然保留")
     }
 
+    private fun editPromptWhileGenerating() {
+        val session = aiSession ?: return
+        val prompt = session.transactionId?.let { aiTransactionStore.get(it)?.prompt }.orEmpty()
+        aiGenerationStatusText.text = "正在准备新的提示词任务"
+        aiExecutor.execute {
+            try {
+                val copy = aiSessionStore.newFile("miku_ai_original_", ".jpg")
+                session.originalFile.copyTo(copy, overwrite = true)
+                runOnUiThread {
+                    // The original task keeps its own file and continues in the background.
+                    aiSessionStore.clear(deleteFiles = false)
+                    aiSession = AiSession(copy, session.captureTime, session.captureLocation)
+                    aiPromptEditText.setText(prompt)
+                    showAiPromptStage()
+                }
+            } catch (error: Throwable) {
+                runOnUiThread { toast("无法复制原图: ${error.message ?: "未知错误"}") }
+            }
+        }
+    }
+
+    private fun retakeWhileGenerating() {
+        returnToAiCaptureKeepingTask()
+        toast("当前任务已转入后台处理")
+    }
+
+    private fun returnToAiCaptureKeepingTask() {
+        aiSessionStore.clear(deleteFiles = false)
+        aiSession = null
+        aiPromptEditText.text?.clear()
+        enterAiCaptureStage()
+    }
+
+    private fun editPromptFromResult() {
+        val session = aiSession ?: return
+        setAiResultButtonsEnabled(false)
+        aiExecutor.execute {
+            try {
+                val originalCopy = aiSessionStore.newFile("miku_ai_original_", ".jpg")
+                session.originalFile.copyTo(originalCopy, overwrite = true)
+                val task = AiTransaction(
+                    originalPath = originalCopy.absolutePath,
+                    captureTime = session.captureTime,
+                    captureLocation = session.captureLocation,
+                    prompt = aiPromptEditText.text.toString().ifBlank { aiSettingsStore.load().defaultPrompt },
+                    includeTimeWatermark = aiTimeWatermarkSwitch.isChecked,
+                    includeLocationWatermark = aiLocationWatermarkSwitch.isChecked
+                )
+                aiTransactionStore.create(task)
+                runOnUiThread {
+                    session.transactionId?.let { aiTransactionStore.remove(it) }
+                    deleteAiSessionFiles(session)
+                    aiSessionStore.clear(deleteFiles = false)
+                    aiSession = AiSession(originalCopy, session.captureTime, session.captureLocation, transactionId = task.id)
+                    AiOverlayService.refresh(this@MainActivity)
+                    showAiPromptStage()
+                    setAiResultButtonsEnabled(true)
+                }
+            } catch (error: Throwable) {
+                runOnUiThread {
+                    setAiResultButtonsEnabled(true)
+                    toast("无法创建新的提示词任务: ${error.message ?: "未知错误"}")
+                }
+            }
+        }
+    }
+
     private fun confirmRegenerate() {
         AlertDialog.Builder(this)
             .setTitle("重新生成")
@@ -793,11 +861,7 @@ class MainActivity : AppCompatActivity() {
                     aiPageBackButton.isEnabled = true
                     aiPageSettingsButton.isEnabled = true
                     aiPageSettingsButton.alpha = 1f
-                    toast(when {
-                        saveOriginal && saveResult -> "原图和 AI 图片已保存"
-                        saveOriginal -> "原图已保存"
-                        else -> "AI 图片已保存"
-                    })
+                    toast("AI 图片已保存")
                 }
             } catch (error: Throwable) {
                 runOnUiThread {
@@ -888,27 +952,15 @@ class MainActivity : AppCompatActivity() {
         AiOverlayService.refresh(this)
     }
 
-    private fun moveGenerationToBackground() {
-        val session = aiSession ?: return
-        ensureAiTransaction(session)
-        updateTransactionFromCurrentSession()
-        AiOverlayService.refresh(this)
-        aiSessionStore.clear(deleteFiles = false)
-        aiSession = null
-        aiPromptEditText.text?.clear()
-        enterAiCaptureStage()
-        toast("已转入后台处理")
-    }
     private val aiPhotoPicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@registerForActivityResult
         importAiPhoto(uri)
     }
 
     private fun updateAiResultActions() {
-        val saved = aiSession?.resultSaved == true
-        aiResultSaveActions.visibility = if (saved) View.GONE else View.VISIBLE
-        aiResultActions.visibility = if (saved) View.GONE else View.VISIBLE
-        aiResultPostSaveActions.visibility = if (saved) View.VISIBLE else View.GONE
+        aiResultSaveActions.visibility = View.VISIBLE
+        aiResultActions.visibility = View.GONE
+        aiResultPostSaveActions.visibility = View.GONE
     }
 
     private fun requestExitAiMode() {
@@ -924,11 +976,7 @@ class MainActivity : AppCompatActivity() {
                     exitAiMode(deleteSession = true)
                 }
                 .show()
-            AiStage.RESULT -> if (aiSession?.resultSaved == true) {
-                exitAiMode(deleteSession = true)
-            } else {
-                confirmExitAiModeWithUnsavedPhoto()
-            }
+            AiStage.RESULT -> returnToAiCapture()
             AiStage.PROMPT -> confirmExitAiModeWithUnsavedPhoto()
         }
     }
@@ -1895,6 +1943,9 @@ class MainActivity : AppCompatActivity() {
                     if (captureModeAtShutter == CameraMode.AI) {
                         val clean = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                         PhotoComposer.prepareCleanPhoto(file, spec, clean)
+                        val originalUri = PhotoComposer.saveFileToGallery(
+                            this@MainActivity, clean, "miku_original", "image/jpeg"
+                        )
                         val task = aiTransactionStore.create(AiTransaction(
                             originalPath = clean.absolutePath,
                             captureTime = aiCaptureTimeAtShutter,
@@ -1920,6 +1971,7 @@ class MainActivity : AppCompatActivity() {
                             }
                             aiSession = session
                             captureButton.isEnabled = true
+                            updateRecentPhoto(originalUri)
                             persistAiSession(stage = "PROMPT", prompt = aiSettingsStore.load().defaultPrompt)
                             showAiPromptStage(resetPrompt = true)
                             // CameraX is still unwinding its callback. Delay system-window work.

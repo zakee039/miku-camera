@@ -790,20 +790,46 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/aiCancelGenerationButton"
-                            style="@style/Widget.Material3.Button.TextButton"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
                             android:layout_width="wrap_content"
                             android:layout_height="48dp"
                             android:layout_marginTop="24dp"
                             android:text="取消生成"
-                            android:textColor="@color/white" />
+                            android:textColor="#FF5C63"
+                            app:strokeColor="#FF5C63"
+                            app:strokeWidth="2dp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="20dp"
+                            android:text="以下操作会将当前任务转为后台"
+                            android:textColor="#99FFFFFF"
+                            android:textSize="13sp" />
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/aiBackgroundGenerationButton"
-                            style="@style/Widget.Material3.Button"
+                            android:id="@+id/aiEditPromptDuringGenerationButton"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
                             android:layout_width="wrap_content"
                             android:layout_height="48dp"
                             android:layout_marginTop="8dp"
-                            android:text="后台处理" />
+                            android:backgroundTint="#153D39"
+                            android:text="修改提示词"
+                            android:textColor="@color/white"
+                            app:strokeColor="@color/accent"
+                            app:strokeWidth="2dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiRetakeDuringGenerationButton"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#153D39"
+                            android:text="重新拍摄"
+                            android:textColor="@color/white"
+                            app:strokeColor="@color/accent"
+                            app:strokeWidth="2dp" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -848,7 +874,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="44dp"
                                 android:layout_weight="1"
-                                android:text="保存 AI 图"
+                                android:text="修改提示词"
                                 android:textSize="12sp" />
 
                             <com.google.android.material.button.MaterialButton
@@ -858,7 +884,7 @@
                                 android:layout_height="44dp"
                                 android:layout_marginStart="6dp"
                                 android:layout_weight="1"
-                                android:text="仅原图"
+                                android:text="重新拍摄"
                                 android:textSize="12sp" />
 
                             <com.google.android.material.button.MaterialButton
@@ -868,7 +894,7 @@
                                 android:layout_height="44dp"
                                 android:layout_marginStart="6dp"
                                 android:layout_weight="1"
-                                android:text="保存两张"
+                                android:text="保存图片"
                                 android:textSize="12sp" />
                         </LinearLayout>
 

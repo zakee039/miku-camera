@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.mikucamera.MainActivity
 import com.example.mikucamera.R
+import com.example.mikucamera.ai.AiGenerationService
 import com.example.mikucamera.ai.AiTransaction
 import com.example.mikucamera.ai.AiTransactionState
 import com.example.mikucamera.ai.AiTransactionStore
@@ -95,11 +96,22 @@ class AiOverlayService : Service() {
         tasks.forEach { task -> addView(taskRow(task)) }
     }
 
-    private fun taskRow(task: AiTransaction): View = TextView(this).apply {
+    private fun taskRow(task: AiTransaction): View = LinearLayout(this).apply {
         val index = AiTransactionStore(this@AiOverlayService).all().indexOfFirst { it.id == task.id } + 1
-        text = "$index，${SimpleDateFormat("HH:mm:ss", Locale.CHINA).format(Date(task.createdAt))}，${task.message}"
-        textSize = 13f; setTextColor(stateColor(task.state)); maxLines = 2; setPadding(0, dp(9), 0, dp(9))
-        setOnClickListener { openTask(task.id) }
+        gravity = Gravity.CENTER_VERTICAL; orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(9), 0, dp(9))
+        addView(TextView(this@AiOverlayService).apply {
+            text = "$index，${SimpleDateFormat("HH:mm:ss", Locale.CHINA).format(Date(task.createdAt))}，${task.message}"
+            textSize = 13f; setTextColor(stateColor(task.state)); maxLines = 2
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener { openTask(task.id) }
+        })
+        if (task.state == AiTransactionState.FAILED) {
+            addView(TextView(this@AiOverlayService).apply {
+                text = "↻"; textSize = 18f; gravity = Gravity.CENTER; contentDescription = "重试"
+                setTextColor(Color.WHITE); background = rounded(Color.rgb(205, 55, 55)); setPadding(dp(7), dp(2), dp(7), dp(2))
+                setOnClickListener { AiGenerationService.retry(this@AiOverlayService, task.id) }
+            })
+        }
     }
 
     private fun openTask(id: String) {

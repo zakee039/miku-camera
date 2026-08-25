@@ -67,6 +67,7 @@ import com.example.mikucamera.camera.PhotoComposer
 import com.example.mikucamera.ai.AiImageClient
 import com.example.mikucamera.ai.AiImageException
 import com.example.mikucamera.ai.AiGenerationService
+import com.example.mikucamera.ai.AiGenerationConfiguration
 import com.example.mikucamera.ai.AiSessionStore
 import com.example.mikucamera.ai.AiTransaction
 import com.example.mikucamera.ai.AiTransactionState
@@ -673,18 +674,29 @@ class MainActivity : AppCompatActivity() {
     private fun startAiGeneration() {
         val session = aiSession ?: return toast("请先拍摄照片")
         val settings = aiSettingsStore.load()
-        val profile = settings.activeProfile
-        if (!profile.preset.supportsCurrentProtocol) {
-            toast("${profile.preset.displayName} 预设需要专用接口适配，当前版本暂不能直接生成")
+        val taskId = ensureAiTransaction(session)
+        val existingTask = aiTransactionStore.get(taskId) ?: return toast("该事务已被清除")
+        val configuration = if (existingTask.attemptCount == 0) {
+            AiGenerationConfiguration.from(settings)
+        } else {
+            existingTask.configuration ?: AiGenerationConfiguration.from(settings)
+        }
+        val credentialProfile = settings.profiles.firstOrNull { it.id == configuration.profileId }
+        if (credentialProfile == null) {
+            toast("该事务使用的 API 配置已被删除，请重新选择配置")
             showAiApiProfilesDialog()
             return
         }
-        if (settings.apiKey.isBlank()) {
+        if (!configuration.preset.supportsCurrentProtocol) {
+            toast("${configuration.preset.displayName} 预设需要专用接口适配，当前版本暂不能直接生成")
+            showAiApiProfilesDialog()
+            return
+        }
+        if (credentialProfile.apiKey.isBlank()) {
             toast("请先设置 API Key")
             showAiSettingsHome()
             return
         }
-        val taskId = ensureAiTransaction(session)
         aiTransactionStore.update(taskId) {
             it.copy(
                 captureTime = session.captureTime,
@@ -695,7 +707,11 @@ class MainActivity : AppCompatActivity() {
                 state = AiTransactionState.RUNNING,
                 message = "正在处理中",
                 resultPath = null,
-                resultSaved = false
+                resultSaved = false,
+                // A draft may still adopt settings changed from the prompt page.
+                // Once submitted, retries must use its original configuration.
+                configuration = configuration,
+                attemptCount = it.attemptCount + 1
             )
         }
         session.resultFile?.delete()
@@ -739,16 +755,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun editPromptWhileGenerating() {
         val session = aiSession ?: return
-        val prompt = session.transactionId?.let { aiTransactionStore.get(it)?.prompt }.orEmpty()
+        val sourceTask = session.transactionId?.let { aiTransactionStore.get(it) }
+        val prompt = sourceTask?.prompt.orEmpty()
+        val includeTime = sourceTask?.includeTimeWatermark ?: aiTimeWatermarkSwitch.isChecked
+        val includeLocation = sourceTask?.includeLocationWatermark ?: aiLocationWatermarkSwitch.isChecked
         aiGenerationStatusText.text = "正在准备新的提示词任务"
         aiExecutor.execute {
             try {
                 val copy = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                 session.originalFile.copyTo(copy, overwrite = true)
+                val task = createAiTransactionSnapshot(
+                    source = copy,
+                    captureTime = session.captureTime,
+                    captureLocation = session.captureLocation,
+                    prompt = prompt,
+                    includeTime = includeTime,
+                    includeLocation = includeLocation,
+                    configuration = sourceTask?.configuration
+                )
                 runOnUiThread {
                     // The original task keeps its own file and continues in the background.
                     aiSessionStore.clear(deleteFiles = false)
-                    aiSession = AiSession(copy, session.captureTime, session.captureLocation)
+                    aiSession = AiSession(copy, session.captureTime, session.captureLocation, transactionId = task.id)
                     aiPromptEditText.setText(prompt)
                     showAiPromptStage()
                 }
@@ -764,31 +792,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun returnToAiCaptureKeepingTask() {
+        val session = aiSession
         aiSessionStore.clear(deleteFiles = false)
         aiSession = null
+        // The background task has its own original-file snapshot, so the former
+        // screen session can be discarded without touching a running request.
+        session?.let { abandoned -> aiExecutor.execute { deleteAiSessionFiles(abandoned) } }
         aiPromptEditText.text?.clear()
         enterAiCaptureStage()
     }
 
     private fun editPromptFromResult() {
         val session = aiSession ?: return
+        val prompt = aiPromptEditText.text.toString().ifBlank { aiSettingsStore.load().defaultPrompt }
+        val includeTime = aiTimeWatermarkSwitch.isChecked
+        val includeLocation = aiLocationWatermarkSwitch.isChecked
+        val previousTask = session.transactionId?.let { aiTransactionStore.get(it) }
         setAiResultButtonsEnabled(false)
         aiExecutor.execute {
             try {
                 val originalCopy = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                 session.originalFile.copyTo(originalCopy, overwrite = true)
-                val task = AiTransaction(
-                    originalPath = originalCopy.absolutePath,
+                val task = createAiTransactionSnapshot(
+                    source = originalCopy,
                     captureTime = session.captureTime,
                     captureLocation = session.captureLocation,
-                    prompt = aiPromptEditText.text.toString().ifBlank { aiSettingsStore.load().defaultPrompt },
-                    includeTimeWatermark = aiTimeWatermarkSwitch.isChecked,
-                    includeLocationWatermark = aiLocationWatermarkSwitch.isChecked
+                    prompt = prompt,
+                    includeTime = includeTime,
+                    includeLocation = includeLocation,
+                    configuration = previousTask?.configuration
                 )
-                aiTransactionStore.create(task)
                 runOnUiThread {
-                    session.transactionId?.let { aiTransactionStore.remove(it) }
-                    deleteAiSessionFiles(session)
+                    removeTransactionWithoutBlocking(session)
                     aiSessionStore.clear(deleteFiles = false)
                     aiSession = AiSession(originalCopy, session.captureTime, session.captureLocation, transactionId = task.id)
                     AiOverlayService.refresh(this@MainActivity)
@@ -815,12 +850,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun returnToAiCapture() {
         aiSession?.let { session ->
-            session.transactionId?.let { aiTransactionStore.remove(it) }
-            deleteAiSessionFiles(session)
+            removeTransactionWithoutBlocking(session)
         }
-        aiSessionStore.clear()
+        aiSessionStore.clear(deleteFiles = false)
         aiSession = null
-        AiOverlayService.refresh(this)
         aiPromptEditText.text?.clear()
         enterAiCaptureStage()
     }
@@ -830,8 +863,6 @@ class MainActivity : AppCompatActivity() {
         if (saveResult && session.resultFile == null) return toast("AI 图片尚未生成")
         setAiResultButtonsEnabled(false)
         aiPageBackButton.isEnabled = false
-        aiPageSettingsButton.isEnabled = false
-        aiPageSettingsButton.alpha = 0.4f
         aiExecutor.execute {
             try {
                 var latest: Uri? = null
@@ -859,16 +890,12 @@ class MainActivity : AppCompatActivity() {
                     updateAiResultActions()
                     setAiResultButtonsEnabled(true)
                     aiPageBackButton.isEnabled = true
-                    aiPageSettingsButton.isEnabled = true
-                    aiPageSettingsButton.alpha = 1f
                     toast("AI 图片已保存")
                 }
             } catch (error: Throwable) {
                 runOnUiThread {
                     setAiResultButtonsEnabled(true)
                     aiPageBackButton.isEnabled = true
-                    aiPageSettingsButton.isEnabled = true
-                    aiPageSettingsButton.alpha = 1f
                     toast("保存失败: ${error.message ?: "未知错误"}")
                 }
             }
@@ -917,24 +944,70 @@ class MainActivity : AppCompatActivity() {
         aiResultPanel.visibility = View.GONE
         aiGeneratingPanel.visibility = View.VISIBLE
         aiGenerationStatusText.text = "正在后台准备照片"
-        aiPageSettingsButton.isEnabled = false
-        aiPageSettingsButton.alpha = 0.4f
+        // Settings stay available throughout the workflow. Existing transactions
+        // retain their own configuration snapshot, so changing defaults is safe.
+        aiPageSettingsButton.isEnabled = true
+        aiPageSettingsButton.alpha = 1f
         updateAiWorkflow(AiStage.GENERATING)
     }
 
     private fun ensureAiTransaction(session: AiSession): String {
         session.transactionId?.let { return it }
         val settings = aiSettingsStore.load()
-        return aiTransactionStore.create(
-            AiTransaction(
-                originalPath = session.originalFile.absolutePath,
-                captureTime = session.captureTime,
-                captureLocation = session.captureLocation,
-                prompt = aiPromptEditText.text.toString().ifBlank { settings.defaultPrompt },
-                includeTimeWatermark = aiTimeWatermarkSwitch.isChecked,
-                includeLocationWatermark = aiLocationWatermarkSwitch.isChecked
-            )
+        return createAiTransactionSnapshot(
+            source = session.originalFile,
+            captureTime = session.captureTime,
+            captureLocation = session.captureLocation,
+            prompt = aiPromptEditText.text.toString().ifBlank { settings.defaultPrompt },
+            includeTime = aiTimeWatermarkSwitch.isChecked,
+            includeLocation = aiLocationWatermarkSwitch.isChecked,
+            configuration = AiGenerationConfiguration.from(settings)
         ).id.also { session.transactionId = it }
+    }
+
+    /** Gives each durable task its own input file, separate from the visible session. */
+    private fun createAiTransactionSnapshot(
+        source: File,
+        captureTime: String,
+        captureLocation: String,
+        prompt: String,
+        includeTime: Boolean,
+        includeLocation: Boolean,
+        configuration: AiGenerationConfiguration? = null
+    ): AiTransaction {
+        val transactionOriginal = aiTransactionStore.newFile("miku_ai_task_original_", ".jpg")
+        try {
+            source.copyTo(transactionOriginal, overwrite = true)
+            return aiTransactionStore.create(
+                AiTransaction(
+                    originalPath = transactionOriginal.absolutePath,
+                    captureTime = captureTime,
+                    captureLocation = captureLocation,
+                    prompt = prompt,
+                    includeTimeWatermark = includeTime,
+                    includeLocationWatermark = includeLocation,
+                    configuration = configuration ?: AiGenerationConfiguration.from(aiSettingsStore.load())
+                )
+            )
+        } catch (error: Throwable) {
+            transactionOriginal.delete()
+            throw error
+        }
+    }
+
+    /**
+     * Removes task metadata immediately, but moves image deletion and overlay
+     * work off the UI thread so returning to the camera never waits on storage.
+     */
+    private fun removeTransactionWithoutBlocking(session: AiSession) {
+        val task = session.transactionId?.let { aiTransactionStore.get(it) }
+        session.transactionId?.let { aiTransactionStore.remove(it, deleteFiles = false) }
+        aiExecutor.execute {
+            deleteAiSessionFiles(session)
+            task?.originalFile?.delete()
+            task?.resultFile?.delete()
+            AiOverlayService.refresh(applicationContext)
+        }
     }
 
     private fun updateTransactionFromCurrentSession() {
@@ -973,6 +1046,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton("退出") { _, _ ->
                     aiGenerationId++
                     aiImageClient.cancel()
+                    aiSession?.transactionId?.let { AiGenerationService.cancel(this, it) }
                     exitAiMode(deleteSession = true)
                 }
                 .show()
@@ -993,12 +1067,8 @@ class MainActivity : AppCompatActivity() {
     private fun exitAiMode(deleteSession: Boolean) {
         hideKeyboard()
         if (deleteSession) {
-            aiSession?.let { session ->
-                session.transactionId?.let { aiTransactionStore.remove(it) }
-                deleteAiSessionFiles(session)
-            }
-            aiSessionStore.clear()
-            AiOverlayService.refresh(this)
+            aiSession?.let(::removeTransactionWithoutBlocking)
+            aiSessionStore.clear(deleteFiles = false)
         }
         aiSession = null
         aiGenerationId++
@@ -1585,14 +1655,24 @@ class MainActivity : AppCompatActivity() {
                 val time = formatAiCaptureTime()
                 val location = formatLocationLabel(includePoi = true).orEmpty()
                 val settings = aiSettingsStore.load()
-                val task = aiTransactionStore.create(AiTransaction(
-                    originalPath = imported.absolutePath, captureTime = time, captureLocation = location,
-                    prompt = settings.defaultPrompt, includeTimeWatermark = settings.includeTimeWatermark,
-                    includeLocationWatermark = settings.includeLocationWatermark
-                ))
+                val task = createAiTransactionSnapshot(
+                    source = imported,
+                    captureTime = time,
+                    captureLocation = location,
+                    prompt = settings.defaultPrompt,
+                    includeTime = settings.includeTimeWatermark,
+                    includeLocation = settings.includeLocationWatermark,
+                    configuration = AiGenerationConfiguration.from(settings)
+                )
+                val importedSession = AiSession(imported, time, location, transactionId = task.id)
                 runOnUiThread {
-                    aiSession?.let { old -> old.transactionId?.let { aiTransactionStore.remove(it) }; deleteAiSessionFiles(old) }
-                    aiSession = AiSession(imported, time, location, transactionId = task.id)
+                    if (cameraMode != CameraMode.AI) {
+                        removeTransactionWithoutBlocking(importedSession)
+                        captureButton.isEnabled = true
+                        return@runOnUiThread
+                    }
+                    aiSession?.let(::removeTransactionWithoutBlocking)
+                    aiSession = importedSession
                     persistAiSession("PROMPT", settings.defaultPrompt)
                     AiOverlayService.refresh(this@MainActivity)
                     captureButton.isEnabled = true
@@ -1946,14 +2026,16 @@ class MainActivity : AppCompatActivity() {
                         val originalUri = PhotoComposer.saveFileToGallery(
                             this@MainActivity, clean, "miku_original", "image/jpeg"
                         )
-                        val task = aiTransactionStore.create(AiTransaction(
-                            originalPath = clean.absolutePath,
+                        val settings = aiSettingsStore.load()
+                        val task = createAiTransactionSnapshot(
+                            source = clean,
                             captureTime = aiCaptureTimeAtShutter,
                             captureLocation = aiLocationAtShutter,
-                            prompt = aiSettingsStore.load().defaultPrompt,
-                            includeTimeWatermark = aiSettingsStore.load().includeTimeWatermark,
-                            includeLocationWatermark = aiSettingsStore.load().includeLocationWatermark
-                        ))
+                            prompt = settings.defaultPrompt,
+                            includeTime = settings.includeTimeWatermark,
+                            includeLocation = settings.includeLocationWatermark,
+                            configuration = AiGenerationConfiguration.from(settings)
+                        )
                         val session = AiSession(
                             originalFile = clean,
                             captureTime = aiCaptureTimeAtShutter,
@@ -1962,13 +2044,10 @@ class MainActivity : AppCompatActivity() {
                         )
                         runOnUiThread {
                             if (cameraMode != CameraMode.AI) {
-                                deleteAiSessionFiles(session)
+                                removeTransactionWithoutBlocking(session)
                                 return@runOnUiThread
                             }
-                            aiSession?.let { previous ->
-                                previous.transactionId?.let { aiTransactionStore.remove(it) }
-                                deleteAiSessionFiles(previous)
-                            }
+                            aiSession?.let(::removeTransactionWithoutBlocking)
                             aiSession = session
                             captureButton.isEnabled = true
                             updateRecentPhoto(originalUri)

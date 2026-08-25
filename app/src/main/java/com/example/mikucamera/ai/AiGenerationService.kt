@@ -54,26 +54,33 @@ class AiGenerationService : Service() {
             return finishWork(startId)
         }
         val settings = AiSettingsStore(this).load()
-        val profile = settings.activeProfile
-        if (settings.apiKey.isBlank() || !profile.preset.supportsCurrentProtocol) {
+        val configuration = task.configuration ?: AiGenerationConfiguration.from(settings)
+        // Credentials are resolved from the original profile when it still exists.
+        // They are not persisted in a task, avoiding a plaintext API-key copy.
+        val credentialProfile = settings.profiles.firstOrNull { it.id == configuration.profileId }
+        if (credentialProfile == null) {
+            store.update(taskId) { it.copy(state = AiTransactionState.FAILED, message = "事务使用的 API 配置已被删除") }
+            return finishWork(startId)
+        }
+        if (credentialProfile.apiKey.isBlank() || !configuration.preset.supportsCurrentProtocol) {
             store.update(taskId) { it.copy(state = AiTransactionState.FAILED, message = "AI 配置不可用") }
             return finishWork(startId)
         }
         val destination = store.newFile("miku_ai_result_", ".jpg")
         try {
             store.update(taskId) { it.copy(message = "正在准备干净照片", resultPath = null, resultSaved = false) }
-            val prompt = AiPromptBuilder.build(task.prompt, task.captureTime, task.captureLocation, settings.visualStyle,
-                settings.outfitStyle, task.includeTimeWatermark, task.includeLocationWatermark)
+            val prompt = AiPromptBuilder.build(task.prompt, task.captureTime, task.captureLocation, configuration.visualStyle,
+                configuration.outfitStyle, task.includeTimeWatermark, task.includeLocationWatermark)
             val client = AiImageClient()
             clients[taskId] = client
             client.createEdit(
-                baseUrl = settings.baseUrl, endpointPath = profile.endpoint, apiKey = settings.apiKey, model = settings.model,
-                visualStyle = settings.visualStyle, outfitStyle = settings.outfitStyle, source = task.originalFile,
+                baseUrl = configuration.baseUrl, endpointPath = configuration.endpoint, apiKey = credentialProfile.apiKey, model = configuration.model,
+                visualStyle = configuration.visualStyle, outfitStyle = configuration.outfitStyle, source = task.originalFile,
                 prompt = prompt, destination = destination,
                 onProgress = { status -> store.update(taskId) { current -> current.copy(message = status) } },
-                useGenerationsProtocol = profile.preset.useGenerationsProtocol,
-                useGeminiProtocol = profile.preset.useGeminiProtocol,
-                useQwenProtocol = profile.preset.useQwenProtocol
+                useGenerationsProtocol = configuration.preset.useGenerationsProtocol,
+                useGeminiProtocol = configuration.preset.useGeminiProtocol,
+                useQwenProtocol = configuration.preset.useQwenProtocol
             )
             increaseConcurrency()
             store.update(taskId) { it.copy(state = AiTransactionState.SUCCESS, message = "生成完成", resultPath = destination.absolutePath) }
@@ -150,7 +157,12 @@ class AiGenerationService : Service() {
             ContextCompat.startForegroundService(context, Intent(context, AiGenerationService::class.java).putExtra(EXTRA_TASK_ID, taskId))
         }
         fun retry(context: Context, taskId: String) {
-            AiTransactionStore(context).update(taskId) { it.copy(state = AiTransactionState.RUNNING, message = "正在排队重试") }
+            AiTransactionStore(context).update(taskId) {
+                it.copy(state = AiTransactionState.RUNNING, message = "正在重新提交", resultPath = null, resultSaved = false)
+            }
+            // The overlay does not receive the activity's transaction broadcast.
+            // Refresh it here so failed -> running is visible before network work starts.
+            AiOverlayService.refresh(context.applicationContext)
             start(context, taskId)
         }
         fun cancel(context: Context, taskId: String) {

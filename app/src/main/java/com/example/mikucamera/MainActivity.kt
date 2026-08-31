@@ -861,6 +861,11 @@ class MainActivity : AppCompatActivity() {
     private fun saveAiSelection(saveOriginal: Boolean, saveResult: Boolean) {
         val session = aiSession ?: return toast("没有可保存的照片")
         if (saveResult && session.resultFile == null) return toast("AI 图片尚未生成")
+        val capturedAt = session.transactionId
+            ?.let(aiTransactionStore::get)
+            ?.createdAt
+            ?: session.originalFile.lastModified().takeIf { it > 0L }
+            ?: System.currentTimeMillis()
         setAiResultButtonsEnabled(false)
         aiPageBackButton.isEnabled = false
         aiExecutor.execute {
@@ -868,15 +873,16 @@ class MainActivity : AppCompatActivity() {
                 var latest: Uri? = null
                 if (saveOriginal) {
                     latest = PhotoComposer.saveFileToGallery(
-                        this, session.originalFile, "miku_original", "image/jpeg"
+                        this, session.originalFile, "origin", "image/jpeg", capturedAt
                     )
                 }
                 if (saveResult) {
                     latest = PhotoComposer.saveFileToGallery(
                         this,
                         session.resultFile!!,
-                        "miku_ai",
-                        AiImageClient.detectImageMime(session.resultFile!!)
+                        "AI",
+                        AiImageClient.detectImageMime(session.resultFile!!),
+                        capturedAt
                     )
                 }
                 runOnUiThread {
@@ -973,7 +979,8 @@ class MainActivity : AppCompatActivity() {
         prompt: String,
         includeTime: Boolean,
         includeLocation: Boolean,
-        configuration: AiGenerationConfiguration? = null
+        configuration: AiGenerationConfiguration? = null,
+        createdAt: Long = System.currentTimeMillis()
     ): AiTransaction {
         val transactionOriginal = aiTransactionStore.newFile("miku_ai_task_original_", ".jpg")
         try {
@@ -986,6 +993,7 @@ class MainActivity : AppCompatActivity() {
                     prompt = prompt,
                     includeTimeWatermark = includeTime,
                     includeLocationWatermark = includeLocation,
+                    createdAt = createdAt,
                     configuration = configuration ?: AiGenerationConfiguration.from(aiSettingsStore.load())
                 )
             )
@@ -2005,6 +2013,7 @@ class MainActivity : AppCompatActivity() {
         val file = File.createTempFile("capture_", ".jpg", cacheDir)
         val captureModeAtShutter = cameraMode
         val aiCaptureTimeAtShutter = if (captureModeAtShutter == CameraMode.AI) formatAiCaptureTime() else ""
+        val fileNameTimeAtShutter = System.currentTimeMillis()
         val aiLocationAtShutter = if (captureModeAtShutter == CameraMode.AI) {
             formatLocationLabel(includePoi = true).orEmpty()
         } else ""
@@ -2023,9 +2032,6 @@ class MainActivity : AppCompatActivity() {
                     if (captureModeAtShutter == CameraMode.AI) {
                         val clean = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                         PhotoComposer.prepareCleanPhoto(file, spec, clean)
-                        val originalUri = PhotoComposer.saveFileToGallery(
-                            this@MainActivity, clean, "miku_original", "image/jpeg"
-                        )
                         val settings = aiSettingsStore.load()
                         val task = createAiTransactionSnapshot(
                             source = clean,
@@ -2034,7 +2040,15 @@ class MainActivity : AppCompatActivity() {
                             prompt = settings.defaultPrompt,
                             includeTime = settings.includeTimeWatermark,
                             includeLocation = settings.includeLocationWatermark,
-                            configuration = AiGenerationConfiguration.from(settings)
+                            configuration = AiGenerationConfiguration.from(settings),
+                            createdAt = fileNameTimeAtShutter
+                        )
+                        val originalUri = PhotoComposer.saveFileToGallery(
+                            this@MainActivity,
+                            clean,
+                            "origin",
+                            "image/jpeg",
+                            task.createdAt
                         )
                         val session = AiSession(
                             originalFile = clean,
@@ -2057,7 +2071,12 @@ class MainActivity : AppCompatActivity() {
                             scheduleAiOverlayRefresh()
                         }
                     } else {
-                        val uri = PhotoComposer.composeAndSave(this@MainActivity, file, spec)
+                        val uri = PhotoComposer.composeAndSave(
+                            this@MainActivity,
+                            file,
+                            spec,
+                            fileNameTimeAtShutter
+                        )
                         runOnUiThread {
                             updateRecentPhoto(uri)
                             toast("已保存到相册")

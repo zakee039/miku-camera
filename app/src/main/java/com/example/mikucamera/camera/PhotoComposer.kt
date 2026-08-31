@@ -21,7 +21,12 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 object PhotoComposer {
-    fun composeAndSave(context: Context, source: File, spec: WatermarkRenderSpec): Uri {
+    fun composeAndSave(
+        context: Context,
+        source: File,
+        spec: WatermarkRenderSpec,
+        capturedAt: Long = System.currentTimeMillis()
+    ): Uri {
         val clean = prepareCleanBitmap(source, spec)
         val output = clean.copy(Bitmap.Config.ARGB_8888, true)
         if (output !== clean) clean.recycle()
@@ -38,7 +43,7 @@ object PhotoComposer {
         )
 
         try {
-            return saveBitmapToGallery(context, output, "watermark")
+            return saveBitmapToGallery(context, output, "origin", capturedAt)
         } finally {
             output.recycle()
         }
@@ -67,35 +72,37 @@ object PhotoComposer {
     fun saveFileToGallery(
         context: Context,
         source: File,
-        prefix: String,
-        mimeType: String = "image/jpeg"
+        suffix: String,
+        mimeType: String = "image/jpeg",
+        capturedAt: Long = System.currentTimeMillis()
     ): Uri {
         val extension = when (mimeType) {
             "image/png" -> "png"
             "image/webp" -> "webp"
             else -> "jpg"
         }
-        return createGalleryEntry(context, prefix, mimeType, extension) { stream ->
+        return createGalleryEntry(context, suffix, mimeType, extension, capturedAt) { stream ->
             source.inputStream().buffered().use { input -> input.copyTo(stream) }
         }
     }
 
-    private fun saveBitmapToGallery(context: Context, bitmap: Bitmap, prefix: String): Uri {
-        return createGalleryEntry(context, prefix, "image/jpeg", "jpg") { stream ->
+    private fun saveBitmapToGallery(context: Context, bitmap: Bitmap, suffix: String, capturedAt: Long): Uri {
+        return createGalleryEntry(context, suffix, "image/jpeg", "jpg", capturedAt) { stream ->
             check(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)) { "照片保存失败" }
         }
     }
 
     private fun createGalleryEntry(
         context: Context,
-        prefix: String,
+        suffix: String,
         mimeType: String,
         extension: String,
+        capturedAt: Long,
         write: (java.io.OutputStream) -> Unit
     ): Uri {
-        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date(capturedAt))
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "${prefix}_$stamp.$extension")
+            put(MediaStore.Images.Media.DISPLAY_NAME, "miku_${stamp}_$suffix.$extension")
             put(MediaStore.Images.Media.MIME_TYPE, mimeType)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/miku camera")

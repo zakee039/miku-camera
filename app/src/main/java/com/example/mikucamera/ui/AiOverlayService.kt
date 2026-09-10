@@ -134,7 +134,7 @@ class AiOverlayService : Service() {
     }
 
     private fun collapsedView(tasks: List<AiTransaction>): View = LinearLayout(this).apply {
-        val running = tasks.count { it.state == AiTransactionState.RUNNING }
+        val running = tasks.count { it.state == AiTransactionState.DRAFT || it.state == AiTransactionState.RUNNING }
         val success = tasks.count { it.state == AiTransactionState.SUCCESS }
         val failed = tasks.count { it.state == AiTransactionState.FAILED }
         gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL; setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -147,7 +147,7 @@ class AiOverlayService : Service() {
         val header = LinearLayout(this@AiOverlayService).apply {
             gravity = Gravity.CENTER_VERTICAL; orientation = LinearLayout.HORIZONTAL; setPadding(0, 0, 0, dp(8))
             addView(TextView(this@AiOverlayService).apply { text = ">"; textSize = 16f; setTextColor(Color.DKGRAY); setPadding(0, 0, dp(24), 0) })
-            addView(counter(tasks.count { it.state == AiTransactionState.RUNNING }, Color.BLACK)); addView(separator())
+            addView(counter(tasks.count { it.state == AiTransactionState.DRAFT || it.state == AiTransactionState.RUNNING }, Color.BLACK)); addView(separator())
             addView(counter(tasks.count { it.state == AiTransactionState.SUCCESS }, Color.rgb(30, 140, 75))); addView(separator())
             addView(counter(tasks.count { it.state == AiTransactionState.FAILED }, Color.rgb(205, 55, 55)))
         }
@@ -301,7 +301,7 @@ class AiOverlayService : Service() {
 
     private fun counter(count: Int, color: Int) = TextView(this).apply { text = count.toString(); textSize = 15f; setTextColor(color) }
     private fun separator() = TextView(this).apply { text = " | "; textSize = 15f; setTextColor(Color.GRAY) }
-    private fun stateColor(state: AiTransactionState) = when (state) { AiTransactionState.RUNNING -> Color.BLACK; AiTransactionState.SUCCESS -> Color.rgb(30, 140, 75); AiTransactionState.FAILED -> Color.rgb(205, 55, 55) }
+    private fun stateColor(state: AiTransactionState) = when (state) { AiTransactionState.DRAFT, AiTransactionState.RUNNING -> Color.BLACK; AiTransactionState.SUCCESS -> Color.rgb(30, 140, 75); AiTransactionState.FAILED -> Color.rgb(205, 55, 55) }
     private fun rounded(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(12).toFloat() }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun notification(): android.app.Notification {

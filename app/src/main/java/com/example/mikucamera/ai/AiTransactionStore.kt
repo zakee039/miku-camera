@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-enum class AiTransactionState { RUNNING, SUCCESS, FAILED }
+enum class AiTransactionState { DRAFT, RUNNING, SUCCESS, FAILED }
 
 /**
  * Non-secret generation choices frozen with a task.  API keys deliberately stay
@@ -47,7 +47,7 @@ data class AiTransaction(
     val includeTimeWatermark: Boolean,
     val includeLocationWatermark: Boolean,
     val createdAt: Long = System.currentTimeMillis(),
-    val state: AiTransactionState = AiTransactionState.RUNNING,
+    val state: AiTransactionState = AiTransactionState.DRAFT,
     val message: String = "等待开始生成",
     val resultPath: String? = null,
     val resultSaved: Boolean = false,
@@ -133,27 +133,38 @@ class AiTransactionStore(private val context: Context) {
         }
     }
 
-    private fun JSONObject.toTask() = AiTransaction(
-        id = optString("id"), originalPath = optString("originalPath"), captureTime = optString("captureTime"),
-        captureLocation = optString("captureLocation"), prompt = optString("prompt"),
-        includeTimeWatermark = optBoolean("includeTime", true), includeLocationWatermark = optBoolean("includeLocation", true),
-        createdAt = optLong("createdAt", System.currentTimeMillis()),
-        state = runCatching { AiTransactionState.valueOf(optString("state")) }.getOrDefault(AiTransactionState.RUNNING),
-        message = optString("message", "等待开始生成"), resultPath = optString("resultPath").ifBlank { null },
-        resultSaved = optBoolean("resultSaved", false),
-        configuration = optJSONObject("configuration")?.let { config -> runCatching {
-            AiGenerationConfiguration(
-                profileId = config.optString("profileId"),
-                preset = AiServicePreset.fromStored(config.optString("preset")),
-                baseUrl = config.optString("baseUrl"),
-                endpoint = config.optString("endpoint"),
-                model = config.optString("model"),
-                visualStyle = AiVisualStyle.fromStored(config.optString("visualStyle")),
-                outfitStyle = AiOutfitStyle.fromStored(config.optString("outfitStyle"))
-            )
-        }.getOrNull() },
-        attemptCount = optInt("attemptCount", 0)
-    )
+    private fun JSONObject.toTask(): AiTransaction {
+        val attempts = optInt("attemptCount", 0)
+        val storedState = runCatching { AiTransactionState.valueOf(optString("state")) }
+            .getOrDefault(if (attempts == 0) AiTransactionState.DRAFT else AiTransactionState.RUNNING)
+        // Older versions stored a not-yet-submitted prompt draft as RUNNING.
+        // attemptCount is incremented only when the user actually taps 开始生成, so it
+        // gives us a safe migration path for those existing drafts.
+        val migratedState = if (storedState == AiTransactionState.RUNNING && attempts == 0) {
+            AiTransactionState.DRAFT
+        } else storedState
+        return AiTransaction(
+            id = optString("id"), originalPath = optString("originalPath"), captureTime = optString("captureTime"),
+            captureLocation = optString("captureLocation"), prompt = optString("prompt"),
+            includeTimeWatermark = optBoolean("includeTime", true), includeLocationWatermark = optBoolean("includeLocation", true),
+            createdAt = optLong("createdAt", System.currentTimeMillis()),
+            state = migratedState,
+            message = optString("message", "等待开始生成"), resultPath = optString("resultPath").ifBlank { null },
+            resultSaved = optBoolean("resultSaved", false),
+            configuration = optJSONObject("configuration")?.let { config -> runCatching {
+                AiGenerationConfiguration(
+                    profileId = config.optString("profileId"),
+                    preset = AiServicePreset.fromStored(config.optString("preset")),
+                    baseUrl = config.optString("baseUrl"),
+                    endpoint = config.optString("endpoint"),
+                    model = config.optString("model"),
+                    visualStyle = AiVisualStyle.fromStored(config.optString("visualStyle")),
+                    outfitStyle = AiOutfitStyle.fromStored(config.optString("outfitStyle"))
+                )
+            }.getOrNull() },
+            attemptCount = attempts
+        )
+    }
 
     companion object {
         const val ACTION_CHANGED = "com.example.mikucamera.AI_TRANSACTION_CHANGED"

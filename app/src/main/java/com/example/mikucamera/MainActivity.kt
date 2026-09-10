@@ -154,7 +154,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiOriginalPreview: ImageView
     private lateinit var aiResultPreview: ImageView
     private lateinit var aiPromptEditText: EditText
-    private lateinit var aiMetadataText: TextView
+    private lateinit var aiVisualStyleText: TextView
+    private lateinit var aiOutfitStyleText: TextView
+    private lateinit var aiVisualStyleToggleButton: MaterialButton
+    private lateinit var aiOutfitStyleToggleButton: MaterialButton
     private lateinit var aiTimeEditText: TextView
     private lateinit var aiLocationEditText: TextView
     private lateinit var aiTimeWatermarkSwitch: SwitchMaterial
@@ -339,7 +342,10 @@ class MainActivity : AppCompatActivity() {
         aiOriginalPreview = findViewById(R.id.aiOriginalPreview)
         aiResultPreview = findViewById(R.id.aiResultPreview)
         aiPromptEditText = findViewById(R.id.aiPromptEditText)
-        aiMetadataText = findViewById(R.id.aiMetadataText)
+        aiVisualStyleText = findViewById(R.id.aiVisualStyleText)
+        aiOutfitStyleText = findViewById(R.id.aiOutfitStyleText)
+        aiVisualStyleToggleButton = findViewById(R.id.aiVisualStyleToggleButton)
+        aiOutfitStyleToggleButton = findViewById(R.id.aiOutfitStyleToggleButton)
         aiTimeEditText = findViewById(R.id.aiTimeEditText)
         aiLocationEditText = findViewById(R.id.aiLocationEditText)
         aiTimeWatermarkSwitch = findViewById(R.id.aiTimeWatermarkSwitch)
@@ -551,6 +557,8 @@ class MainActivity : AppCompatActivity() {
                 else -> true
             }
         }
+        aiVisualStyleToggleButton.setOnClickListener { toggleAiVisualStyle() }
+        aiOutfitStyleToggleButton.setOnClickListener { toggleAiOutfitStyle() }
         aiTimeEditText.setOnClickListener { editAiMetadata(time = true) }
         aiLocationEditText.setOnClickListener { editAiMetadata(time = false) }
         findViewById<MaterialButton>(R.id.uploadButton).setOnClickListener {
@@ -1441,13 +1449,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateAiMetadataLabel() {
-        if (!::aiMetadataText.isInitialized) return
+        if (!::aiVisualStyleText.isInitialized || !::aiOutfitStyleText.isInitialized) return
         val session = aiSession ?: return
         val settings = aiSettingsStore.load()
         aiTimeEditText.text = "时间：${session.captureTime}  ✎"
         aiLocationEditText.text = "地点：${session.captureLocation.ifBlank { "未获取到地点" }}  ✎"
-        aiMetadataText.text = "形象：${settings.visualStyle.displayName}\n" +
-                "服装：${settings.outfitStyle.displayName}"
+        aiVisualStyleText.text = "形象：${settings.visualStyle.displayName}"
+        aiOutfitStyleText.text = "服装：${settings.outfitStyle.displayName}"
+        aiVisualStyleToggleButton.text = if (settings.visualStyle == AiVisualStyle.REALISTIC) "二次元" else "三次元"
+        aiOutfitStyleToggleButton.text = if (settings.outfitStyle == AiOutfitStyle.OFFICIAL) "场景搭配" else "公式服"
+    }
+
+    private fun toggleAiVisualStyle() {
+        val current = aiSettingsStore.load()
+        val next = if (current.visualStyle == AiVisualStyle.REALISTIC) AiVisualStyle.ANIME else AiVisualStyle.REALISTIC
+        aiSettingsStore.saveImageSettings(next, current.outfitStyle, current.defaultPrompt, current.includeTimeWatermark, current.includeLocationWatermark)
+        updateAiMetadataLabel()
+    }
+
+    private fun toggleAiOutfitStyle() {
+        val current = aiSettingsStore.load()
+        val next = if (current.outfitStyle == AiOutfitStyle.OFFICIAL) AiOutfitStyle.SCENE_ADAPTIVE else AiOutfitStyle.OFFICIAL
+        aiSettingsStore.saveImageSettings(current.visualStyle, next, current.defaultPrompt, current.includeTimeWatermark, current.includeLocationWatermark)
+        updateAiMetadataLabel()
     }
 
     private fun editAiMetadata(time: Boolean) {
@@ -1693,6 +1717,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openAiTransaction(id: String) {
+        // Preserve prompt-page edits before switching to another durable transaction.
+        if (aiStage == AiStage.PROMPT && aiSession?.transactionId != null) {
+            updateTransactionFromCurrentSession()
+        }
         val task = aiTransactionStore.get(id) ?: return toast("该事务已被清除")
         aiSession = AiSession(task.originalFile, task.captureTime, task.captureLocation, task.resultFile, task.resultSaved, task.id)
         cameraMode = CameraMode.AI
@@ -1700,6 +1728,7 @@ class MainActivity : AppCompatActivity() {
         aiTimeWatermarkSwitch.isChecked = task.includeTimeWatermark
         aiLocationWatermarkSwitch.isChecked = task.includeLocationWatermark
         when (task.state) {
+            AiTransactionState.DRAFT -> showAiPromptStage()
             AiTransactionState.SUCCESS -> showAiResultStage()
             AiTransactionState.RUNNING -> showAiGeneratingStage()
             AiTransactionState.FAILED -> { showAiPromptStage(); toast("上次生成失败：${task.message}") }

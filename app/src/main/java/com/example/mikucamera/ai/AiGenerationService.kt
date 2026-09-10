@@ -25,7 +25,7 @@ class AiGenerationService : Service() {
     private val clients = ConcurrentHashMap<String, AiImageClient>()
     private val activeWork = AtomicInteger(0)
     private val pendingRetries = AtomicInteger(0)
-    private val rateLimitUntil = AtomicLong(0L)
+    private val rateLimitUntil = ConcurrentHashMap<String, AtomicLong>()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val taskId = intent?.getStringExtra(EXTRA_TASK_ID) ?: return START_NOT_STICKY
@@ -48,13 +48,14 @@ class AiGenerationService : Service() {
         val store = AiTransactionStore(this)
         val task = store.get(taskId) ?: return finishWork(startId)
         if (task.state != AiTransactionState.RUNNING) return finishWork(startId)
-        val waitMillis = rateLimitUntil.get() - System.currentTimeMillis()
-        if (waitMillis > 0) {
-            scheduleRetry(taskId, startId, store, waitMillis, "请求过多，正在排队等待")
-            return finishWork(startId)
-        }
         val settings = AiSettingsStore(this).load()
         val configuration = task.configuration ?: AiGenerationConfiguration.from(settings)
+        val cooldownKey = "${configuration.profileId}|${configuration.model}"
+        val waitMillis = (rateLimitUntil[cooldownKey]?.get() ?: 0L) - System.currentTimeMillis()
+        if (waitMillis > 0) {
+            scheduleRetry(taskId, startId, store, waitMillis, "服务额度冷却中，${formatRetryDelay((waitMillis + 999L) / 1_000L)}后自动重试")
+            return finishWork(startId)
+        }
         // Credentials are resolved from the original profile when it still exists.
         // They are not persisted in a task, avoiding a plaintext API-key copy.
         val credentialProfile = settings.profiles.firstOrNull { it.id == configuration.profileId }
@@ -83,11 +84,12 @@ class AiGenerationService : Service() {
                 useQwenProtocol = configuration.preset.useQwenProtocol
             )
             increaseConcurrency()
+            rateLimitUntil.remove(cooldownKey)
             store.update(taskId) { it.copy(state = AiTransactionState.SUCCESS, message = "生成完成", resultPath = destination.absolutePath) }
         } catch (error: Throwable) {
             destination.delete()
             if (isRateLimited(error)) {
-                backOffAndRetry(taskId, startId, store)
+                backOffAndRetry(taskId, startId, store, cooldownKey, error)
                 return
             }
             store.update(taskId) { it.copy(state = AiTransactionState.FAILED, message = error.message?.take(120) ?: "生成失败") }
@@ -98,11 +100,17 @@ class AiGenerationService : Service() {
         }
     }
 
-    private fun backOffAndRetry(taskId: String, startId: Int, store: AiTransactionStore) {
+    private fun backOffAndRetry(taskId: String, startId: Int, store: AiTransactionStore, cooldownKey: String, error: Throwable) {
         workExecutor.corePoolSize = 1
-        val waitMillis = RETRY_DELAY_SECONDS * 1_000L
-        rateLimitUntil.set(System.currentTimeMillis() + waitMillis)
-        scheduleRetry(taskId, startId, store, waitMillis, "请求过多，15 秒后自动重试")
+        val retrySeconds = (error as? AiImageException)?.retryAfterSeconds?.coerceAtLeast(1L) ?: RETRY_DELAY_SECONDS
+        val waitMillis = retrySeconds * 1_000L
+        rateLimitUntil.computeIfAbsent(cooldownKey) { AtomicLong(0L) }.set(System.currentTimeMillis() + waitMillis)
+        val message = if (retrySeconds == RETRY_DELAY_SECONDS) {
+            "请求过多，15 秒后自动重试"
+        } else {
+            "服务额度冷却中，${formatRetryDelay(retrySeconds)}后自动重试"
+        }
+        scheduleRetry(taskId, startId, store, waitMillis, message)
     }
 
     private fun scheduleRetry(taskId: String, startId: Int, store: AiTransactionStore, delayMillis: Long, message: String) {
@@ -124,8 +132,23 @@ class AiGenerationService : Service() {
         }
     }
 
-    private fun isRateLimited(error: Throwable): Boolean = error.message?.contains("429") == true ||
-        error.message?.contains("请求过多") == true || error.message?.contains("rate limit", ignoreCase = true) == true
+    private fun isRateLimited(error: Throwable): Boolean =
+        (error as? AiImageException)?.statusCode == 429 ||
+            error.message?.contains("429") == true ||
+            error.message?.contains("请求过多") == true ||
+            error.message?.contains("rate limit", ignoreCase = true) == true
+
+    private fun formatRetryDelay(seconds: Long): String {
+        val safe = seconds.coerceAtLeast(1L)
+        val hours = safe / 3_600L
+        val minutes = (safe % 3_600L) / 60L
+        val secs = safe % 60L
+        return buildString {
+            if (hours > 0) append(hours).append("小时")
+            if (minutes > 0) append(minutes).append("分钟")
+            if (secs > 0 || (hours == 0L && minutes == 0L)) append(secs).append("秒")
+        }
+    }
 
     private fun finishWork(startId: Int) {
         activeWork.decrementAndGet()

@@ -18,7 +18,9 @@ import java.util.concurrent.atomic.AtomicReference
 class AiImageException(
     message: String,
     val debugLog: String,
-    cause: Throwable? = null
+    cause: Throwable? = null,
+    val statusCode: Int? = null,
+    val retryAfterSeconds: Long? = null
 ) : IllegalStateException(message, cause)
 
 class AiImageClient {
@@ -132,7 +134,14 @@ class AiImageClient {
             if (status !in 200..299) {
                 val body = connection.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 record(summarizeResponse(body))
-                throw IllegalStateException(readApiError(status, body))
+                val retryAfterSeconds = readRetryAfterSeconds(connection, body)
+                retryAfterSeconds?.let { record("retryAfterSeconds=$it") }
+                throw AiImageException(
+                    readApiError(status, body),
+                    log.toString(),
+                    statusCode = status,
+                    retryAfterSeconds = retryAfterSeconds
+                )
             }
 
             onProgress("正在读取 AI 生成结果")
@@ -240,7 +249,14 @@ class AiImageClient {
             if (status !in 200..299) {
                 val body = conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 record(summarizeResponse(body))
-                throw IllegalStateException(readApiError(status, body))
+                val retryAfterSeconds = readRetryAfterSeconds(conn, body)
+                retryAfterSeconds?.let { record("retryAfterSeconds=$it") }
+                throw AiImageException(
+                    readApiError(status, body),
+                    log.toString(),
+                    statusCode = status,
+                    retryAfterSeconds = retryAfterSeconds
+                )
             }
             onProgress("正在读取 AI 生成结果")
             if (contentType.substringBefore(';').trim().startsWith("image/", ignoreCase = true)) {
@@ -344,7 +360,14 @@ class AiImageClient {
             if (status !in 200..299) {
                 val body = conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 record(summarizeResponse(body))
-                throw IllegalStateException(readApiError(status, body))
+                val retryAfterSeconds = readRetryAfterSeconds(conn, body)
+                retryAfterSeconds?.let { record("retryAfterSeconds=$it") }
+                throw AiImageException(
+                    readApiError(status, body),
+                    log.toString(),
+                    statusCode = status,
+                    retryAfterSeconds = retryAfterSeconds
+                )
             }
             onProgress("正在读取 AI 生成结果")
             val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -448,7 +471,14 @@ class AiImageClient {
             if (status !in 200..299) {
                 val body = conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 record(summarizeResponse(body))
-                throw IllegalStateException(readApiError(status, body))
+                val retryAfterSeconds = readRetryAfterSeconds(conn, body)
+                retryAfterSeconds?.let { record("retryAfterSeconds=$it") }
+                throw AiImageException(
+                    readApiError(status, body),
+                    log.toString(),
+                    statusCode = status,
+                    retryAfterSeconds = retryAfterSeconds
+                )
             }
             onProgress("正在读取 AI 生成结果")
             val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -604,6 +634,24 @@ class AiImageClient {
             429 -> "OpenAI 请求过多、余额不足或额度已用完"
             else -> "AI 服务请求失败（$status）${message.takeIf { it.isNotBlank() }?.let { ": ${sanitizeText(it)}" }.orEmpty()}"
         }
+    }
+
+    private fun readRetryAfterSeconds(connection: HttpURLConnection, body: String): Long? {
+        val fromHeader = connection.getHeaderField("Retry-After")
+            ?.trim()
+            ?.toLongOrNull()
+            ?.takeIf { it > 0L }
+        if (fromHeader != null) return fromHeader
+
+        return runCatching {
+            val root = JSONObject(body)
+            val error = root.optJSONObject("error")
+            when {
+                error?.has("reset_seconds") == true -> error.optLong("reset_seconds", 0L)
+                root.has("reset_seconds") -> root.optLong("reset_seconds", 0L)
+                else -> 0L
+            }.takeIf { it > 0L }
+        }.getOrNull()
     }
 
     private fun summarizeResponse(body: String): String {

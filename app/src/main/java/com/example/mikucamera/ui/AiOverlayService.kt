@@ -294,6 +294,10 @@ class AiOverlayService : Service() {
     }
 
     private fun openTask(id: String) {
+        if (expanded) {
+            expanded = false
+            runCatching { redraw() }
+        }
         val intent = Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_AI_TRANSACTION_ID, id)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         startActivity(intent)

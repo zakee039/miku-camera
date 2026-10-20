@@ -167,7 +167,7 @@ class AiGenerationService : Service() {
                 }
             }
             abortRetries.remove(taskId)
-            store.update(taskId) { it.copy(state = AiTransactionState.FAILED, message = error.message?.take(120) ?: "生成失败") }
+            store.update(taskId) { it.copy(state = AiTransactionState.FAILED, message = error.message?.take(800) ?: "生成失败") }
         } finally {
             clients.remove(taskId)
             AiOverlayService.refresh(this)

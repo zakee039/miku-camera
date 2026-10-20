@@ -151,6 +151,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiPageSettingsButton: ImageView
     private lateinit var aiPromptPanel: View
     private lateinit var aiGeneratingPanel: View
+    private lateinit var aiGeneratingRunningView: View
+    private lateinit var aiGeneratingFailedView: View
+    private lateinit var aiFailedConfigText: TextView
+    private lateinit var aiFailedErrorText: TextView
+    private lateinit var aiFailedRetryButton: MaterialButton
+    private lateinit var aiFailedEditButton: MaterialButton
+    private lateinit var aiFailedAbandonButton: MaterialButton
     private lateinit var aiResultPanel: View
     private lateinit var aiResultSaveActions: View
     private lateinit var aiResultActions: View
@@ -361,6 +368,13 @@ class MainActivity : AppCompatActivity() {
         aiPageSettingsButton = findViewById(R.id.aiPageSettingsButton)
         aiPromptPanel = findViewById(R.id.aiPromptPanel)
         aiGeneratingPanel = findViewById(R.id.aiGeneratingPanel)
+        aiGeneratingRunningView = findViewById(R.id.aiGeneratingRunningView)
+        aiGeneratingFailedView = findViewById(R.id.aiGeneratingFailedView)
+        aiFailedConfigText = findViewById(R.id.aiFailedConfigText)
+        aiFailedErrorText = findViewById(R.id.aiFailedErrorText)
+        aiFailedRetryButton = findViewById(R.id.aiFailedRetryButton)
+        aiFailedEditButton = findViewById(R.id.aiFailedEditButton)
+        aiFailedAbandonButton = findViewById(R.id.aiFailedAbandonButton)
         aiResultPanel = findViewById(R.id.aiResultPanel)
         aiResultSaveActions = findViewById(R.id.aiResultSaveActions)
         aiResultActions = findViewById(R.id.aiResultActions)
@@ -555,6 +569,9 @@ class MainActivity : AppCompatActivity() {
         MikuUi.button(findViewById(R.id.saveWatermarkButton), true)
         MikuUi.dangerButton(findViewById(R.id.deleteWatermarkButton))
         MikuUi.dangerButton(findViewById(R.id.aiCancelGenerationButton))
+        MikuUi.button(aiFailedRetryButton, true)
+        MikuUi.button(aiFailedEditButton, false)
+        MikuUi.dangerButton(aiFailedAbandonButton)
         MikuUi.button(findViewById(R.id.aiGenerateAllButton), false)
         MikuUi.button(findViewById(R.id.aiGenerateButton), true)
         MikuUi.button(aiShootOriginalButton, false)
@@ -731,6 +748,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.aiCancelGenerationButton).setOnClickListener { cancelAiGeneration() }
         findViewById<MaterialButton>(R.id.aiEditPromptDuringGenerationButton).setOnClickListener { editPromptWhileGenerating() }
         findViewById<MaterialButton>(R.id.aiRetakeDuringGenerationButton).setOnClickListener { retakeWhileGenerating() }
+        aiFailedRetryButton.setOnClickListener { startAiGeneration() }
+        aiFailedEditButton.setOnClickListener { showAiPromptStage(resetPrompt = false) }
+        aiFailedAbandonButton.setOnClickListener { returnToAiCapture() }
         findViewById<MaterialButton>(R.id.aiEditPromptButton).setOnClickListener { showAiPromptStage() }
         findViewById<MaterialButton>(R.id.aiRegenerateButton).setOnClickListener { confirmRegenerate() }
         findViewById<MaterialButton>(R.id.aiSavedRetakeButton).setOnClickListener { returnToAiCapture() }
@@ -1234,9 +1254,36 @@ class MainActivity : AppCompatActivity() {
         aiPromptPanel.visibility = View.GONE
         aiResultPanel.visibility = View.GONE
         aiGeneratingPanel.visibility = View.VISIBLE
+        aiGeneratingRunningView.visibility = View.VISIBLE
+        aiGeneratingFailedView.visibility = View.GONE
         aiGenerationStatusText.text = "正在后台准备照片"
         // Settings stay available throughout the workflow. Existing transactions
         // retain their own configuration snapshot, so changing defaults is safe.
+        aiPageSettingsButton.isEnabled = true
+        aiPageSettingsButton.alpha = 1f
+        updateAiWorkflow(AiStage.GENERATING)
+    }
+
+    private fun showAiFailedStage(errorMessage: String) {
+        hideKeyboard()
+        aiStage = AiStage.GENERATING
+        aiCaptureProgressBar.visibility = View.GONE
+        camera?.cameraControl?.enableTorch(false)
+        cameraProvider?.unbindAll()
+        camera = null
+        imageCapture = null
+        aiPageHost.visibility = View.VISIBLE
+        viewfinderHost.visibility = View.GONE
+        bottomChrome.visibility = View.GONE
+        cameraControls.visibility = View.GONE
+        aiPromptPanel.visibility = View.GONE
+        aiResultPanel.visibility = View.GONE
+        aiGeneratingPanel.visibility = View.VISIBLE
+        aiGeneratingRunningView.visibility = View.GONE
+        aiGeneratingFailedView.visibility = View.VISIBLE
+        val config = currentGenerationConfiguration()
+        aiFailedConfigText.text = "${config.visualStyle.displayName} · ${config.outfitStyle.displayName} · ${config.resolution.label}"
+        aiFailedErrorText.text = errorMessage.ifBlank { "未知错误" }
         aiPageSettingsButton.isEnabled = true
         aiPageSettingsButton.alpha = 1f
         updateAiWorkflow(AiStage.GENERATING)
@@ -1366,17 +1413,23 @@ class MainActivity : AppCompatActivity() {
                     exitAiMode(deleteSession = true)
                 }
             }
-            AiStage.GENERATING -> AlertDialog.Builder(this)
-                .setTitle("退出 AI mode")
-                .setMessage("是否停止等待并放弃本次照片？服务端若已开始生成，本次请求仍可能产生费用。")
-                .setNegativeButton("继续等待", null)
-                .setPositiveButton("退出") { _, _ ->
-                    aiGenerationId++
-                    aiImageClient.cancel()
-                    aiSession?.transactionId?.let { AiGenerationService.cancel(this, it) }
-                    exitAiMode(deleteSession = true)
+            AiStage.GENERATING -> {
+                if (aiGeneratingFailedView.visibility == View.VISIBLE) {
+                    showAiPromptStage(resetPrompt = false)
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle("退出 AI mode")
+                        .setMessage("是否停止等待并放弃本次照片？服务端若已开始生成，本次请求仍可能产生费用。")
+                        .setNegativeButton("继续等待", null)
+                        .setPositiveButton("退出") { _, _ ->
+                            aiGenerationId++
+                            aiImageClient.cancel()
+                            aiSession?.transactionId?.let { AiGenerationService.cancel(this, it) }
+                            exitAiMode(deleteSession = true)
+                        }
+                        .show()
                 }
-                .show()
+            }
             AiStage.RESULT -> returnToAiCapture()
             AiStage.PROMPT -> confirmExitAiModeWithUnsavedPhoto()
         }
@@ -2628,7 +2681,7 @@ class MainActivity : AppCompatActivity() {
             AiTransactionState.DRAFT -> showAiPromptStage()
             AiTransactionState.SUCCESS -> showAiResultStage()
             AiTransactionState.RUNNING -> showAiGeneratingStage()
-            AiTransactionState.FAILED -> { showAiPromptStage(); toast("上次生成失败：${task.message}") }
+            AiTransactionState.FAILED -> showAiFailedStage(task.message)
         }
     }
 
@@ -2636,14 +2689,16 @@ class MainActivity : AppCompatActivity() {
         val id = aiSession?.transactionId ?: return
         val task = aiTransactionStore.get(id) ?: return
         if (task.state == AiTransactionState.RUNNING && aiStage == AiStage.GENERATING) {
+            if (aiGeneratingFailedView.visibility == View.VISIBLE) {
+                showAiGeneratingStage()
+            }
             aiGenerationStatusText.text = task.message
         } else if (task.state == AiTransactionState.SUCCESS && aiStage == AiStage.GENERATING) {
             aiSession?.resultFile = task.resultFile
             aiSession?.resultSaved = task.resultSaved
             showAiResultStage()
         } else if (task.state == AiTransactionState.FAILED && aiStage == AiStage.GENERATING) {
-            showAiPromptStage()
-            toast("AI 生成失败：${task.message}")
+            showAiFailedStage(task.message)
         }
     }
 

@@ -692,11 +692,14 @@ class AiImageClient {
 
     private fun readApiError(status: Int, body: String): String {
         val message = runCatching {
-            JSONObject(body).optJSONObject("error")?.optString("message")
-        }.getOrNull().orEmpty()
+            val root = JSONObject(body)
+            root.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
+                ?: root.optString("message").takeIf { it.isNotBlank() }
+                ?: root.optString("detail").takeIf { it.isNotBlank() }
+        }.getOrNull() ?: body.trim().take(500)
         return when (status) {
-            401 -> "OpenAI API Key 无效或已失效"
-            429 -> "OpenAI 请求过多、余额不足或额度已用完"
+            401 -> "OpenAI API Key 无效或已失效${message.takeIf { it.isNotBlank() }?.let { ": ${sanitizeText(it)}" }.orEmpty()}"
+            429 -> "OpenAI 请求过多、余额不足或额度已用完${message.takeIf { it.isNotBlank() }?.let { ": ${sanitizeText(it)}" }.orEmpty()}"
             else -> "AI 服务请求失败（$status）${message.takeIf { it.isNotBlank() }?.let { ": ${sanitizeText(it)}" }.orEmpty()}"
         }
     }

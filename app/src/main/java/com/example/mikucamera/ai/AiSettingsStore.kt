@@ -166,11 +166,6 @@ class AiSettingsStore(context: Context) {
      * 仅替换已知的旧默认值，用户手动填写过的服务地址、接口或模型保持不变。
      */
     private fun migrateProtocolProfile(profile: AiApiProfile): AiApiProfile = when (profile.preset) {
-        AiServicePreset.OPENAI -> profile.copy(
-            model = profile.model
-                .replaceKnownLegacyValue("gpt-image-2", AiServicePreset.OPENAI.defaultModel)
-                .replaceKnownLegacyValue("gpt-image-1.5", AiServicePreset.OPENAI.defaultModel)
-        )
         AiServicePreset.QWEN -> profile.copy(
             baseUrl = profile.baseUrl.replaceKnownLegacyValue(
                 "https://dashscope.aliyuncs.com/compatible-mode/v1",

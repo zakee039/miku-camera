@@ -1282,7 +1282,8 @@ class MainActivity : AppCompatActivity() {
         aiGeneratingRunningView.visibility = View.GONE
         aiGeneratingFailedView.visibility = View.VISIBLE
         val config = currentGenerationConfiguration()
-        aiFailedConfigText.text = "${config.visualStyle.displayName} · ${config.outfitStyle.displayName} · ${config.resolution.label}"
+        aiFailedConfigText.text = "${config.visualStyle.displayName} · ${config.outfitStyle.displayName} · ${config.resolution.label}\n模型：${config.model}（${config.preset.displayName}）"
+        aiFailedConfigText.gravity = Gravity.CENTER
         aiFailedErrorText.text = errorMessage.ifBlank { "未知错误" }
         aiPageSettingsButton.isEnabled = true
         aiPageSettingsButton.alpha = 1f

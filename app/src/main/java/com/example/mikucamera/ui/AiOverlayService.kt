@@ -294,13 +294,29 @@ class AiOverlayService : Service() {
     }
 
     private fun openTask(id: String) {
-        if (expanded) {
-            expanded = false
-            runCatching { redraw() }
+        val intent = Intent(this, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_AI_TRANSACTION_ID, id)
+            .addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            )
+        val pendingFlags = android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        val pendingIntent = android.app.PendingIntent.getActivity(this, id.hashCode(), intent, pendingFlags)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 34) {
+                val options = android.app.ActivityOptions.makeBasic()
+                    .setPendingIntentBackgroundActivityStartMode(
+                        android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                    )
+                pendingIntent.send(this, 0, null, null, null, null, options.toBundle())
+            } else {
+                pendingIntent.send()
+            }
+        }.onFailure {
+            runCatching { startActivity(intent) }
         }
-        val intent = Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_AI_TRANSACTION_ID, id)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        startActivity(intent)
     }
 
     private fun counter(count: Int, color: Int) = TextView(this).apply { text = count.toString(); textSize = 15f; setTextColor(color) }

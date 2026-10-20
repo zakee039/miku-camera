@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Flash OFF: lightning bolt with clean diagonal slash -->
+    <path
+        android:fillColor="#26637773"
+        android:strokeColor="@color/ink"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M13.2,2.8 L5.8,13.2 L11.5,13.2 L10.2,21.2 L18.2,10.6 L12.4,10.6 Z" />
+    <!-- White halo under the slash for crisp separation -->
+    <path
+        android:strokeColor="@color/background"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M4.2,4.5 L19.8,19.5" />
+    <!-- Red/coral slash -->
+    <path
+        android:strokeColor="#E53935"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round"
+        android:pathData="M4.2,4.5 L19.8,19.5" />
+</vector>

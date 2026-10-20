@@ -42,7 +42,7 @@ class LocationProvider(private val context: Context) {
                     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
                 }
                 manager.requestLocationUpdates(provider, 1_000L, 1f, listener, Looper.getMainLooper())
-                context.mainExecutor.execute { onResult(lastKnown(provider)) }
+                ContextCompat.getMainExecutor(context).execute { onResult(lastKnown(provider)) }
             }
         } catch (_: SecurityException) {
             onResult(null)

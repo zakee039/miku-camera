@@ -11,15 +11,15 @@ android {
         applicationId = "com.zakee.mikucamera"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.6.6"
+        versionCode = 20
+        versionName = "1.7.0"
     }
 
-    // Keep the signing key stable so locally installed updates can replace
-    // previous APKs. The keystore is local-only and ignored by Git.
+    // Keep the v2 signing key stable so locally installed updates can replace
+    // previous APKs. The keystore is stored in OneDrive and copied locally (ignored by Git).
     signingConfigs {
         create("stableLocal") {
-            storeFile = file("miku-camera-signing.keystore")
+            storeFile = file("miku-camera-signkey-v2.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
@@ -28,7 +28,14 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("stableLocal")
+            if (file("miku-camera-signkey-v2.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("stableLocal")
+            } else {
+                // A clean checkout has no release key. Keep this install separate
+                // so testing never requires uninstalling the user's signed app.
+                applicationIdSuffix = ".preview"
+                resValue("string", "app_name", "miku camera · 预览")
+            }
         }
         release {
             isMinifyEnabled = false
@@ -55,6 +62,7 @@ android.applicationVariants.all {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")

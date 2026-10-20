@@ -39,8 +39,11 @@ class AiImageClient {
         onProgress: (String) -> Unit,
         useGenerationsProtocol: Boolean = false,
         useGeminiProtocol: Boolean = false,
-        useQwenProtocol: Boolean = false
+        useQwenProtocol: Boolean = false,
+        resolution: AiResolution = AiResolution.K2,
+        referenceImage: File? = null
     ): File {
+        val validReference = referenceImage?.takeIf { it.isFile && it.length() > 0L }
         val log = StringBuilder()
         fun record(message: String) {
             val stamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
@@ -51,21 +54,24 @@ class AiImageClient {
             return createEditWithGemini(
                 baseUrl = baseUrl, endpointPath = endpointPath, apiKey = apiKey, model = model,
                 visualStyle = visualStyle, outfitStyle = outfitStyle, source = source,
-                prompt = prompt, destination = destination, onProgress = onProgress
+                prompt = prompt, destination = destination, onProgress = onProgress,
+                resolution = resolution, referenceImage = validReference
             )
         }
         if (useQwenProtocol) {
             return createEditWithQwen(
                 baseUrl = baseUrl, endpointPath = endpointPath, apiKey = apiKey, model = model,
                 visualStyle = visualStyle, outfitStyle = outfitStyle, source = source,
-                prompt = prompt, destination = destination, onProgress = onProgress
+                prompt = prompt, destination = destination, onProgress = onProgress,
+                resolution = resolution, referenceImage = validReference
             )
         }
         if (useGenerationsProtocol) {
             return createEditWithGenerations(
                 baseUrl = baseUrl, endpointPath = endpointPath, apiKey = apiKey, model = model,
                 visualStyle = visualStyle, outfitStyle = outfitStyle, source = source,
-                prompt = prompt, destination = destination, onProgress = onProgress
+                prompt = prompt, destination = destination, onProgress = onProgress,
+                resolution = resolution, referenceImage = validReference
             )
         }
 
@@ -83,8 +89,13 @@ class AiImageClient {
             record("outfitStyle=${outfitStyle.name} (${outfitStyle.displayName})")
             record("apiKey=configured (not logged)")
             record("source=${sourceSize.first}x${sourceSize.second}, bytes=${source.length()}")
+            if (validReference != null) {
+                val refSize = readImageSize(validReference)
+                record("reference=${refSize.first}x${refSize.second}, bytes=${validReference.length()}")
+            }
             record("promptChars=${prompt.length} (content not logged)")
-            record("requestFields=model,prompt,quality,output_format,image[]")
+            record("resolution=${resolution.label}, size=${resolution.openAiSize(sourceSize.first, sourceSize.second)}")
+            record("requestFields=model,prompt,quality,size,output_format,image[]")
 
             val boundary = "----MikuCamera${UUID.randomUUID()}"
             connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -94,13 +105,14 @@ class AiImageClient {
                 doOutput = true
                 useCaches = false
                 setChunkedStreamingMode(65_536)
+                setRequestProperty("Connection", "close")
                 setRequestProperty("Authorization", "Bearer $apiKey")
                 setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
                 setRequestProperty("Accept", "application/json, image/*")
             }
             activeConnection.set(connection)
 
-            onProgress("正在上传干净照片")
+            onProgress(if (validReference != null) "正在上传原图与形象参考图" else "正在上传干净照片")
             connection.outputStream.buffered().use { output ->
                 val writer = BufferedWriter(OutputStreamWriter(output, Charsets.UTF_8))
                 fun field(name: String, value: String) {
@@ -112,6 +124,7 @@ class AiImageClient {
                 field("model", model.trim())
                 field("prompt", prompt)
                 field("quality", "medium")
+                field("size", resolution.openAiSize(sourceSize.first, sourceSize.second))
                 field("output_format", "jpeg")
                 writer.append("--$boundary\r\n")
                 writer.append("Content-Disposition: form-data; name=\"image[]\"; filename=\"photo.jpg\"\r\n")
@@ -119,6 +132,20 @@ class AiImageClient {
                 writer.flush()
                 source.inputStream().buffered().use { input -> input.copyTo(output) }
                 output.flush()
+                if (validReference != null) {
+                    val refMime = detectImageMime(validReference)
+                    val refExt = when (refMime) {
+                        "image/png" -> "png"
+                        "image/webp" -> "webp"
+                        else -> "jpg"
+                    }
+                    writer.append("\r\n--$boundary\r\n")
+                    writer.append("Content-Disposition: form-data; name=\"image[]\"; filename=\"reference.$refExt\"\r\n")
+                    writer.append("Content-Type: $refMime\r\n\r\n")
+                    writer.flush()
+                    validReference.inputStream().buffered().use { input -> input.copyTo(output) }
+                    output.flush()
+                }
                 writer.append("\r\n--$boundary--\r\n")
                 writer.flush()
             }
@@ -196,7 +223,9 @@ class AiImageClient {
         source: File,
         prompt: String,
         destination: File,
-        onProgress: (String) -> Unit
+        onProgress: (String) -> Unit,
+        resolution: AiResolution,
+        referenceImage: File? = null
     ): File {
         val log = StringBuilder()
         fun record(message: String) {
@@ -219,9 +248,19 @@ class AiImageClient {
             val payload = JSONObject().apply {
                 put("model", model.trim())
                 put("prompt", prompt)
-                put("image", imageDataUri)
+                if (referenceImage != null && referenceImage.isFile && referenceImage.length() > 0L) {
+                    val refMime = detectImageMime(referenceImage)
+                    val refBase64 = Base64.encodeToString(referenceImage.readBytes(), Base64.NO_WRAP)
+                    val refDataUri = "data:$refMime;base64,$refBase64"
+                    put("image", org.json.JSONArray().apply {
+                        put(imageDataUri)
+                        put(refDataUri)
+                    })
+                } else {
+                    put("image", imageDataUri)
+                }
                 put("response_format", "b64_json")
-                put("size", "2K")
+                put("size", resolution.label)
                 put("stream", false)
             }
             record("promptChars=${prompt.length} (content not logged)")
@@ -234,12 +273,13 @@ class AiImageClient {
                 readTimeout = 300_000
                 doOutput = true
                 useCaches = false
+                setRequestProperty("Connection", "close")
                 setRequestProperty("Authorization", "Bearer $apiKey")
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Accept", "application/json, image/*")
             }
             activeConnection.set(conn)
-            onProgress("正在上传干净照片")
+            onProgress(if (referenceImage != null) "正在上传原图与形象参考图" else "正在上传干净照片")
             conn.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(payload.toString()) }
             onProgress("AI 正在生成 Miku 与时间地点水印")
             val status = conn.responseCode
@@ -298,7 +338,9 @@ class AiImageClient {
         source: File,
         prompt: String,
         destination: File,
-        onProgress: (String) -> Unit
+        onProgress: (String) -> Unit,
+        resolution: AiResolution,
+        referenceImage: File? = null
     ): File {
         val log = StringBuilder()
         fun record(message: String) {
@@ -326,6 +368,11 @@ class AiImageClient {
                             put("role", "user")
                             put("content", org.json.JSONArray().apply {
                                 put(JSONObject().apply { put("image", imageDataUri) })
+                                if (referenceImage != null && referenceImage.isFile && referenceImage.length() > 0L) {
+                                    val refMime = detectImageMime(referenceImage)
+                                    val refBase64 = Base64.encodeToString(referenceImage.readBytes(), Base64.NO_WRAP)
+                                    put(JSONObject().apply { put("image", "data:$refMime;base64,$refBase64") })
+                                }
                                 put(JSONObject().apply { put("text", prompt) })
                             })
                         })
@@ -333,6 +380,9 @@ class AiImageClient {
                 })
                 put("parameters", JSONObject().apply {
                     put("n", 1)
+                    check(resolution != AiResolution.K4 || !model.startsWith("qwen-image", true)) { "当前 Qwen 模型最高支持 2K，请选择 1K / 2K 或更换支持 4K 的模型" }
+                    val size = readImageSize(source)
+                    put("size", resolution.size(size.first, size.second, "*"))
                     put("watermark", false)
                 })
             }
@@ -346,11 +396,12 @@ class AiImageClient {
                 readTimeout = 300_000
                 doOutput = true
                 useCaches = false
+                setRequestProperty("Connection", "close")
                 setRequestProperty("Authorization", "Bearer $apiKey")
                 setRequestProperty("Content-Type", "application/json")
             }
             activeConnection.set(conn)
-            onProgress("正在上传干净照片")
+            onProgress(if (referenceImage != null) "正在上传原图与形象参考图" else "正在上传干净照片")
             conn.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(payload.toString()) }
             onProgress("AI 正在生成 Miku 与时间地点水印")
             val status = conn.responseCode
@@ -414,7 +465,9 @@ class AiImageClient {
         source: File,
         prompt: String,
         destination: File,
-        onProgress: (String) -> Unit
+        onProgress: (String) -> Unit,
+        resolution: AiResolution,
+        referenceImage: File? = null
     ): File {
         val log = StringBuilder()
         fun record(message: String) {
@@ -442,14 +495,25 @@ class AiImageClient {
                         put("data", base64)
                         put("mime_type", mime)
                     })
+                    if (referenceImage != null && referenceImage.isFile && referenceImage.length() > 0L) {
+                        val refMime = detectImageMime(referenceImage)
+                        val refBase64 = Base64.encodeToString(referenceImage.readBytes(), Base64.NO_WRAP)
+                        put(JSONObject().apply {
+                            put("type", "image")
+                            put("data", refBase64)
+                            put("mime_type", refMime)
+                        })
+                    }
                 })
-                put("output_config", JSONObject().apply {
-                    put("response_modalities", org.json.JSONArray().apply { put("image") })
+                put("response_format", JSONObject().apply {
+                    put("type", "image")
+                    put("mime_type", "image/jpeg")
+                    put("image_size", resolution.label)
                 })
             }
             record("promptChars=${prompt.length} (content not logged)")
             record("sourceBytes=${source.length()}, encodedChars=${base64.length}")
-            record("requestFields=model,input,output_config")
+            record("requestFields=model,input,response_format; resolution=${resolution.label}")
 
             val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -457,11 +521,12 @@ class AiImageClient {
                 readTimeout = 300_000
                 doOutput = true
                 useCaches = false
+                setRequestProperty("Connection", "close")
                 setRequestProperty("x-goog-api-key", apiKey)
                 setRequestProperty("Content-Type", "application/json")
             }
             activeConnection.set(conn)
-            onProgress("正在上传干净照片")
+            onProgress(if (referenceImage != null) "正在上传原图与形象参考图" else "正在上传干净照片")
             conn.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(payload.toString()) }
             onProgress("AI 正在生成 Miku 与时间地点水印")
             val status = conn.responseCode

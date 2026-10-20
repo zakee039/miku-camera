@@ -6,6 +6,8 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.InputStream
 import java.security.KeyStore
 import java.util.UUID
 import javax.crypto.Cipher
@@ -14,12 +16,12 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 enum class AiVisualStyle(val displayName: String) {
-    ANIME("二次元"), REALISTIC("三次元（真人写实）");
+    ANIME("二次元"), REALISTIC("真人");
     companion object { fun fromStored(value: String?) = entries.firstOrNull { it.name == value } ?: ANIME }
 }
 
 enum class AiOutfitStyle(val displayName: String) {
-    OFFICIAL("公式服"), SCENE_ADAPTIVE("依据场景自行搭配（非公式服）");
+    OFFICIAL("公式服"), SCENE_ADAPTIVE("非公式服");
     companion object { fun fromStored(value: String?) = entries.firstOrNull { it.name == value } ?: SCENE_ADAPTIVE }
 }
 
@@ -33,7 +35,7 @@ enum class AiServicePreset(
     val useGeminiProtocol: Boolean = false,
     val useQwenProtocol: Boolean = false
 ) {
-    OPENAI("OpenAI", "https://api.openai.com/v1", "/images/edits", "gpt-image-2", true),
+    OPENAI("OpenAI", "https://api.openai.com/v1", "/images/edits", "gpt-image-2.5", true),
     VOLCENGINE_ARK("字节跳动 / 火山方舟", "https://ark.cn-beijing.volces.com/api/v3", "/images/generations", "doubao-seedream-5-0-260128", true, true),
     QWEN("Qwen / 阿里云百炼", "https://dashscope.aliyuncs.com", "/api/v1/services/aigc/multimodal-generation/generation", "qwen-image-3.0-pro", true, false, false, true),
     GEMINI("Gemini / Nano Banana", "https://generativelanguage.googleapis.com", "/v1beta/interactions", "gemini-3.1-flash-image", true, false, true),
@@ -59,16 +61,22 @@ data class AiSettings(
     val outfitStyle: AiOutfitStyle,
     val defaultPrompt: String,
     val includeTimeWatermark: Boolean,
-    val includeLocationWatermark: Boolean
+    val includeLocationWatermark: Boolean,
+    val resolution: AiResolution = AiResolution.K2,
+    val startInAiMode: Boolean = false,
+    val defaultReferencePath: String? = null
 ) {
     val activeProfile: AiApiProfile get() = profiles.firstOrNull { it.id == activeProfileId } ?: profiles.first()
     val baseUrl: String get() = activeProfile.baseUrl
     val apiKey: String get() = activeProfile.apiKey
     val model: String get() = activeProfile.model
+    val defaultReferenceFile: File?
+        get() = defaultReferencePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
 }
 
 class AiSettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val presetDir = File(context.filesDir, "ai_presets").apply { if (!exists()) mkdirs() }
 
     fun load(): AiSettings {
         val storedProfiles = loadProfiles()
@@ -79,16 +87,44 @@ class AiSettingsStore(context: Context) {
         if (profiles != storedProfiles && storedProfiles.isNotEmpty()) {
             saveProfiles(profiles, activeId)
         }
+        val refPath = prefs.getString(KEY_DEFAULT_REFERENCE_PATH, null)
+            ?.takeIf { it.isNotBlank() && File(it).isFile }
         return AiSettings(profiles, activeId, AiVisualStyle.fromStored(prefs.getString(KEY_VISUAL_STYLE, null)),
             AiOutfitStyle.fromStored(prefs.getString(KEY_OUTFIT_STYLE, null)),
             prefs.getString(KEY_DEFAULT_PROMPT, DEFAULT_PROMPT) ?: DEFAULT_PROMPT,
-            prefs.getBoolean(KEY_TIME_WATERMARK, true), prefs.getBoolean(KEY_LOCATION_WATERMARK, true))
+            prefs.getBoolean(KEY_TIME_WATERMARK, true), prefs.getBoolean(KEY_LOCATION_WATERMARK, true),
+            AiResolution.fromStored(prefs.getString("resolution", null)),
+            prefs.getBoolean("start_in_ai", false),
+            refPath)
+    }
+
+    fun saveDefaultReferenceImage(input: InputStream): File {
+        val target = File(presetDir, "default_reference_${System.currentTimeMillis()}.jpg")
+        target.outputStream().use { out -> input.copyTo(out) }
+        prefs.getString(KEY_DEFAULT_REFERENCE_PATH, null)
+            ?.takeIf { it.isNotBlank() && it != target.absolutePath }
+            ?.let { File(it).delete() }
+        prefs.edit().putString(KEY_DEFAULT_REFERENCE_PATH, target.absolutePath).commit()
+        return target
+    }
+
+    fun clearDefaultReferenceImage() {
+        prefs.getString(KEY_DEFAULT_REFERENCE_PATH, null)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { File(it).delete() }
+        prefs.edit().remove(KEY_DEFAULT_REFERENCE_PATH).commit()
+    }
+
+    fun saveResolution(resolution: AiResolution) { prefs.edit().putString("resolution", resolution.name).commit() }
+    fun savePreferences(startInAiMode: Boolean, prompt: String, includeTime: Boolean, includeLocation: Boolean) {
+        prefs.edit().putBoolean("start_in_ai", startInAiMode).putString(KEY_DEFAULT_PROMPT, prompt)
+            .putBoolean(KEY_TIME_WATERMARK, includeTime).putBoolean(KEY_LOCATION_WATERMARK, includeLocation).commit()
     }
 
     fun saveImageSettings(visualStyle: AiVisualStyle, outfitStyle: AiOutfitStyle, defaultPrompt: String, includeTime: Boolean, includeLocation: Boolean) {
         prefs.edit().putString(KEY_VISUAL_STYLE, visualStyle.name).putString(KEY_OUTFIT_STYLE, outfitStyle.name)
             .putString(KEY_DEFAULT_PROMPT, defaultPrompt.trim()).putBoolean(KEY_TIME_WATERMARK, includeTime)
-            .putBoolean(KEY_LOCATION_WATERMARK, includeLocation).apply()
+            .putBoolean(KEY_LOCATION_WATERMARK, includeLocation).commit()
     }
 
     // Compatibility bridge for callers migrating from the single-profile settings UI.
@@ -110,11 +146,11 @@ class AiSettingsStore(context: Context) {
                 .put("baseUrl", baseUrl).put("endpoint", profile.endpoint.trim()).put("model", profile.model.trim())
                 .put("apiKey", encrypt(profile.apiKey.trim())))
         }
-        prefs.edit().putString(KEY_PROFILES, array.toString()).putString(KEY_ACTIVE_PROFILE, activeProfileId).apply()
+        prefs.edit().putString(KEY_PROFILES, array.toString()).putString(KEY_ACTIVE_PROFILE, activeProfileId).commit()
     }
 
     fun hasAcceptedUploadNotice() = prefs.getBoolean(KEY_NOTICE_ACCEPTED, false)
-    fun acceptUploadNotice() { prefs.edit().putBoolean(KEY_NOTICE_ACCEPTED, true).apply() }
+    fun acceptUploadNotice() { prefs.edit().putBoolean(KEY_NOTICE_ACCEPTED, true).commit() }
 
     private fun loadProfiles(): List<AiApiProfile> = runCatching {
         val array = JSONArray(prefs.getString(KEY_PROFILES, "[]"))
@@ -130,6 +166,11 @@ class AiSettingsStore(context: Context) {
      * 仅替换已知的旧默认值，用户手动填写过的服务地址、接口或模型保持不变。
      */
     private fun migrateProtocolProfile(profile: AiApiProfile): AiApiProfile = when (profile.preset) {
+        AiServicePreset.OPENAI -> profile.copy(
+            model = profile.model
+                .replaceKnownLegacyValue("gpt-image-2", AiServicePreset.OPENAI.defaultModel)
+                .replaceKnownLegacyValue("gpt-image-1.5", AiServicePreset.OPENAI.defaultModel)
+        )
         AiServicePreset.QWEN -> profile.copy(
             baseUrl = profile.baseUrl.replaceKnownLegacyValue(
                 "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -188,9 +229,10 @@ class AiSettingsStore(context: Context) {
         private const val PREFS = "ai_settings"; private const val KEY_PROFILES = "profiles"; private const val KEY_ACTIVE_PROFILE = "active_profile"
         private const val KEY_VISUAL_STYLE = "visual_style"; private const val KEY_OUTFIT_STYLE = "outfit_style"; private const val KEY_DEFAULT_PROMPT = "default_prompt"
         private const val KEY_TIME_WATERMARK = "time_watermark"; private const val KEY_LOCATION_WATERMARK = "location_watermark"; private const val KEY_NOTICE_ACCEPTED = "upload_notice_accepted"
+        private const val KEY_DEFAULT_REFERENCE_PATH = "default_reference_path"
         private const val KEY_BASE_URL = "base_url"; private const val KEY_API_KEY = "api_key_encrypted"; private const val KEY_MODEL = "model"
         private const val KEY_ALIAS = "miku_camera_openai_key"; private const val ANDROID_KEYSTORE = "AndroidKeyStore"; private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        const val DEFAULT_BASE_URL = "https://api.openai.com/v1"; const val DEFAULT_MODEL = "gpt-image-2"
+        const val DEFAULT_BASE_URL = "https://api.openai.com/v1"; const val DEFAULT_MODEL = "gpt-image-2.5"
         const val DEFAULT_PROMPT = "让 Miku 自然地融入照片。若画面中有人，让 Miku 与人物产生自然有趣的互动；若是纯风景，让 Miku 与环境、光线和构图自然融合。"
     }
 }

@@ -20,8 +20,14 @@ data class AiGenerationConfiguration(
     val endpoint: String,
     val model: String,
     val visualStyle: AiVisualStyle,
-    val outfitStyle: AiOutfitStyle
+    val outfitStyle: AiOutfitStyle,
+    val resolution: AiResolution = AiResolution.K2
 ) {
+    fun allCombinations(): List<AiGenerationConfiguration> =
+        AiVisualStyle.entries.flatMap { visual ->
+            AiOutfitStyle.entries.map { outfit -> copy(visualStyle = visual, outfitStyle = outfit) }
+        }
+
     companion object {
         fun from(settings: AiSettings): AiGenerationConfiguration {
             val profile = settings.activeProfile
@@ -32,7 +38,8 @@ data class AiGenerationConfiguration(
                 endpoint = profile.endpoint,
                 model = profile.model,
                 visualStyle = settings.visualStyle,
-                outfitStyle = settings.outfitStyle
+                outfitStyle = settings.outfitStyle,
+                resolution = settings.resolution
             )
         }
     }
@@ -54,10 +61,12 @@ data class AiTransaction(
     /** Null only for transactions created by versions before configuration snapshots. */
     val configuration: AiGenerationConfiguration? = null,
     /** Settings may be refreshed while this is zero; once submitted, retries are frozen. */
-    val attemptCount: Int = 0
+    val attemptCount: Int = 0,
+    val referencePath: String? = null
 ) {
     val originalFile get() = File(originalPath)
     val resultFile get() = resultPath?.let(::File)
+    val referenceFile get() = referencePath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.exists() }
 }
 
 /** Durable task list shared by the activity, generator and system overlay. */
@@ -94,6 +103,7 @@ class AiTransactionStore(private val context: Context) {
             if (deleteFiles) {
                 task.originalFile.delete()
                 task.resultFile?.delete()
+                task.referenceFile?.delete()
             }
         }
         write(current.filterNot { it.id == id })
@@ -124,11 +134,13 @@ class AiTransactionStore(private val context: Context) {
         put("includeLocation", includeLocationWatermark); put("createdAt", createdAt); put("state", state.name)
         put("message", message); put("resultPath", resultPath ?: ""); put("resultSaved", resultSaved)
         put("attemptCount", attemptCount)
+        put("referencePath", referencePath ?: "")
         configuration?.let { config ->
             put("configuration", JSONObject().apply {
                 put("profileId", config.profileId); put("preset", config.preset.name)
                 put("baseUrl", config.baseUrl); put("endpoint", config.endpoint); put("model", config.model)
                 put("visualStyle", config.visualStyle.name); put("outfitStyle", config.outfitStyle.name)
+                put("resolution", config.resolution.name)
             })
         }
     }
@@ -137,9 +149,6 @@ class AiTransactionStore(private val context: Context) {
         val attempts = optInt("attemptCount", 0)
         val storedState = runCatching { AiTransactionState.valueOf(optString("state")) }
             .getOrDefault(if (attempts == 0) AiTransactionState.DRAFT else AiTransactionState.RUNNING)
-        // Older versions stored a not-yet-submitted prompt draft as RUNNING.
-        // attemptCount is incremented only when the user actually taps 开始生成, so it
-        // gives us a safe migration path for those existing drafts.
         val migratedState = if (storedState == AiTransactionState.RUNNING && attempts == 0) {
             AiTransactionState.DRAFT
         } else storedState
@@ -159,10 +168,12 @@ class AiTransactionStore(private val context: Context) {
                     endpoint = config.optString("endpoint"),
                     model = config.optString("model"),
                     visualStyle = AiVisualStyle.fromStored(config.optString("visualStyle")),
-                    outfitStyle = AiOutfitStyle.fromStored(config.optString("outfitStyle"))
+                    outfitStyle = AiOutfitStyle.fromStored(config.optString("outfitStyle")),
+                    resolution = AiResolution.fromStored(config.optString("resolution"))
                 )
             }.getOrNull() },
-            attemptCount = attempts
+            attemptCount = attempts,
+            referencePath = optString("referencePath").takeIf { it.isNotBlank() && File(it).exists() }
         )
     }
 

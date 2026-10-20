@@ -24,10 +24,12 @@ class AiSessionStore(context: Context) {
         val stage: String, // PROMPT / GENERATING / RESULT
         val resultPath: String?,
         val resultSaved: Boolean = false,
-        val transactionId: String? = null
+        val transactionId: String? = null,
+        val referencePath: String? = null
     ) {
         val originalFile get() = File(originalPath)
         val resultFile get() = resultPath?.let { File(it) }
+        val referenceFile get() = referencePath?.takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.exists() }
     }
 
     fun save(snapshot: Snapshot) {
@@ -40,6 +42,7 @@ class AiSessionStore(context: Context) {
             put("resultPath", snapshot.resultPath ?: "")
             put("resultSaved", snapshot.resultSaved)
             put("transactionId", snapshot.transactionId ?: "")
+            put("referencePath", snapshot.referencePath ?: "")
         }.toString()).apply()
     }
 
@@ -52,6 +55,7 @@ class AiSessionStore(context: Context) {
             clear()
             return null
         }
+        val referencePath = json.optString("referencePath").takeIf { it.isNotBlank() && File(it).exists() }
         val resultPath = json.optString("resultPath").takeIf { it.isNotBlank() }
         if (resultPath != null && !File(resultPath).exists()) {
             // 结果图丢失则降级为提示词阶段。
@@ -63,7 +67,8 @@ class AiSessionStore(context: Context) {
                 stage = "PROMPT",
                 resultPath = null,
                 resultSaved = false,
-                transactionId = json.optString("transactionId").ifBlank { null }
+                transactionId = json.optString("transactionId").ifBlank { null },
+                referencePath = referencePath
             )
         }
         var stage = json.optString("stage", "PROMPT")
@@ -76,7 +81,8 @@ class AiSessionStore(context: Context) {
             stage = stage,
             resultPath = resultPath,
             resultSaved = json.optBoolean("resultSaved", false),
-            transactionId = json.optString("transactionId").ifBlank { null }
+            transactionId = json.optString("transactionId").ifBlank { null },
+            referencePath = referencePath
         )
     }.getOrNull()
 
@@ -88,6 +94,7 @@ class AiSessionStore(context: Context) {
         if (deleteFiles) load()?.let { snapshot ->
             snapshot.originalFile.delete()
             snapshot.resultFile?.delete()
+            snapshot.referenceFile?.delete()
         }
         prefs.edit().remove(KEY_SNAPSHOT).apply()
     }

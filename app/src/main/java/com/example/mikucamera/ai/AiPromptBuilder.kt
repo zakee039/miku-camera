@@ -8,7 +8,8 @@ object AiPromptBuilder {
         visualStyle: AiVisualStyle,
         outfitStyle: AiOutfitStyle,
         includeTimeWatermark: Boolean,
-        includeLocationWatermark: Boolean
+        includeLocationWatermark: Boolean,
+        hasReferenceImage: Boolean = false
     ): String {
         val location = captureLocation.ifBlank { "地点信息未获取" }
         val visualDirection = when (visualStyle) {
@@ -23,6 +24,14 @@ object AiPromptBuilder {
             AiOutfitStyle.SCENE_ADAPTIVE ->
                 "MANDATORY SCENE-ADAPTIVE NON-OFFICIAL OUTFIT MODE: First inspect the photographed place, weather, temperature, season, time of day, activity, and social context, then choose a concrete outfit that a person would naturally wear there. Examples include a summer dress or T-shirt and shorts outdoors in heat, a coat and scarf in winter, casual streetwear in a city, sportswear for exercise, hiking clothes in nature, a swimsuit or light resort wear at a beach, school or campus casual wear near a school, or elegant attire at a formal venue. The clothing must visibly respond to this specific scene and must not default to Miku's iconic official costume. STRICTLY FORBIDDEN in this mode: the complete official combination of gray sleeveless top, black detached arm sleeves, black pleated mini skirt, turquoise necktie/accent trim, and thigh-high boots. Do not use stage-performance, cosplay, or generic idol clothing unless the photographed activity itself clearly requires it. Preserve her turquoise twin tails and unmistakable Miku identity through hair and color accents, not by reverting to the official costume."
         }
+        val referenceInstruction = if (hasReferenceImage) {
+            """
+            MULTI-IMAGE REFERENCE INSTRUCTION:
+            Two input images are provided:
+            - Image 1 (first image) is the photographed scene to edit. Preserve its background, environment, lighting, composition, aspect ratio, and any real people in it.
+            - Image 2 (second image) is the character / appearance reference image. Closely follow the character design, hairstyle, outfit details, accessories, and appearance traits shown in Image 2 while integrating the character naturally into Image 1's scene.
+            """.trimIndent()
+        } else ""
         val watermarkDirection = buildWatermarkDirection(
             captureTime = captureTime,
             location = location,
@@ -41,7 +50,7 @@ object AiPromptBuilder {
         return """
             Edit the supplied clean camera photograph as one coherent finished photo. Preserve the input photograph's original composition and aspect ratio, and do not arbitrarily crop or reframe important people or subjects.
             Integrate Hatsune Miku naturally into the photographed scene. Preserve the real people, their identities, faces, bodies, poses, and the main composition. If people are visible, let Miku interact with them in a friendly and believable way without replacing or deforming anyone. If the photo is scenery only, blend Miku into the environment with matching perspective, scale, lighting, shadows, reflections, depth, and color.
-
+            ${if (referenceInstruction.isNotBlank()) "\n$referenceInstruction\n" else ""}
             $watermarkDirection
 
             User direction for this photo:

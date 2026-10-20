@@ -1,141 +1,141 @@
-# 版本号管理指南
+﻿# 鐗堟湰鍙风鐞嗘寚鍗?
 
-本项目统一使用 **语义化版本** 字符串（如 `1.1`、`1.2.0`），并与 Android 安装包版本、Git 标签对齐。
+鏈」鐩粺涓€浣跨敤 **璇箟鍖栫増鏈?* 瀛楃涓诧紙濡?`1.1`銆乣1.2.0`锛夛紝骞朵笌 Android 瀹夎鍖呯増鏈€丟it 鏍囩瀵归綈銆?
 
-## 何时改版本号（协作约定）
+## 浣曟椂鏀圭増鏈彿锛堝崗浣滅害瀹氾級
 
-- **平时写功能 / 修 bug：不要改任何版本号**（不要动 `versionName`、`versionCode`、`VERSION`、README 版本表、Git tag）。
-- **只有当维护者明确说「改版本号 / 发版 / bump 到 x.y」时**，才按本指南做 **全局** 版本更新（Gradle + VERSION + README + commit/tag）。
-- AI / 协作者默认把版本字段当作只读，除非当前任务就是发版。
+- **骞虫椂鍐欏姛鑳?/ 淇?bug锛氫笉瑕佹敼浠讳綍鐗堟湰鍙?*锛堜笉瑕佸姩 `versionName`銆乣versionCode`銆乣VERSION`銆丷EADME 鐗堟湰琛ㄣ€丟it tag锛夈€?
+- **鍙湁褰撶淮鎶よ€呮槑纭銆屾敼鐗堟湰鍙?/ 鍙戠増 / bump 鍒?x.y銆嶆椂**锛屾墠鎸夋湰鎸囧崡鍋?**鍏ㄥ眬** 鐗堟湰鏇存柊锛圙radle + VERSION + README + commit/tag锛夈€?
+- AI / 鍗忎綔鑰呴粯璁ゆ妸鐗堟湰瀛楁褰撲綔鍙锛岄櫎闈炲綋鍓嶄换鍔″氨鏄彂鐗堛€?
 
-## 当前约定
+## 褰撳墠绾﹀畾
 
-| 名称 | 当前值 | 说明 |
+| 鍚嶇О | 褰撳墠鍊?| 璇存槑 |
 |------|--------|------|
-| **versionName** | `1.6.6` | 用户可见版本号（关于页、商店、APK 信息） |
-| **versionCode** | `19` | 整数，每次上架/发版必须 **严格递增** |
-| **Git tag** | `1.6.6` | 与 versionName 一致（本仓库不用 `v` 前缀） |
-| **VERSION 文件** | `1.6.6` | 给人与脚本一眼看到的项目版本 |
+| **versionName** | `1.7.0` | 鐢ㄦ埛鍙鐗堟湰鍙凤紙鍏充簬椤点€佸晢搴椼€丄PK 淇℃伅锛?|
+| **versionCode** | `20` | 鏁存暟锛屾瘡娆′笂鏋?鍙戠増蹇呴』 **涓ユ牸閫掑** |
+| **Git tag** | `1.7.0` | 涓?versionName 涓€鑷达紙鏈粨搴撲笉鐢?`v` 鍓嶇紑锛?|
+| **VERSION 鏂囦欢** | `1.7.0` | 缁欎汉涓庤剼鏈竴鐪肩湅鍒扮殑椤圭洰鐗堟湰 |
 
-> 历史：`0.1.0` 初版；`1.1` 所见即所得布局；`1.2` 定位/门牌/隐私说明与产品化完善；`1.2.1` 记住上次选择的水印；`1.2.2` 修复前置摄像头横屏方向和镜像问题；`1.3.0` 更名为 miku camera 并完善水印编辑与布局；`1.3.1` 修复水印名称持久化；`1.4.0` 新增 AI mode、可配置 AI 服务与风格选择；`1.4.1` 新增内置 miku 水印并调整 AI 按钮；`1.4.2` 完善 AI 水印控制、Miku 专属品牌、作者信息与关于页面；`1.4.3` 拆分图像参数与多组 API 配置，并加入服务商预设；`1.5.0` 接入火山方舟/Qwen/Gemini 多协议、列表 UI 改造、提示词解耦，并新增 AI 会话恢复（进程被杀后保留原图与提示词可恢复界面）；`1.5.1` AI 图片保存后保留结果页面，并提供重新拍摄与修改提示词操作；`1.6.1` 新增 AI 事务后台处理、悬浮窗、连续权限申请及 AI 照片导入；`1.6.2` 优化 AI 照片导入入口的可见性与布局；`1.6.3` 完善 AI 事务交互与重试流程；`1.6.4` 保存完整事务配置、隔离任务原图、同步重试状态并优化事务结束返回性能；`1.6.5` 关联 AI/原图文件名并支持拖动事务悬浮窗；`1.6.6` 优化提示词页形象/服装快速切换、修复草稿事务误进入生成态，并按服务端 Retry-After/冷却时间处理 429 重试。
+> 鍘嗗彶锛歚0.1.0` 鍒濈増锛沗1.1` 鎵€瑙佸嵆鎵€寰楀竷灞€锛沗1.2` 瀹氫綅/闂ㄧ墝/闅愮璇存槑涓庝骇鍝佸寲瀹屽杽锛沗1.2.1` 璁颁綇涓婃閫夋嫨鐨勬按鍗帮紱`1.2.2` 淇鍓嶇疆鎽勫儚澶存í灞忔柟鍚戝拰闀滃儚闂锛沗1.3.0` 鏇村悕涓?miku camera 骞跺畬鍠勬按鍗扮紪杈戜笌甯冨眬锛沗1.3.1` 淇姘村嵃鍚嶇О鎸佷箙鍖栵紱`1.4.0` 鏂板 AI mode銆佸彲閰嶇疆 AI 鏈嶅姟涓庨鏍奸€夋嫨锛沗1.4.1` 鏂板鍐呯疆 miku 姘村嵃骞惰皟鏁?AI 鎸夐挳锛沗1.4.2` 瀹屽杽 AI 姘村嵃鎺у埗銆丮iku 涓撳睘鍝佺墝銆佷綔鑰呬俊鎭笌鍏充簬椤甸潰锛沗1.4.3` 鎷嗗垎鍥惧儚鍙傛暟涓庡缁?API 閰嶇疆锛屽苟鍔犲叆鏈嶅姟鍟嗛璁撅紱`1.5.0` 鎺ュ叆鐏北鏂硅垷/Qwen/Gemini 澶氬崗璁€佸垪琛?UI 鏀归€犮€佹彁绀鸿瘝瑙ｈ€︼紝骞舵柊澧?AI 浼氳瘽鎭㈠锛堣繘绋嬭鏉€鍚庝繚鐣欏師鍥句笌鎻愮ず璇嶅彲鎭㈠鐣岄潰锛夛紱`1.5.1` AI 鍥剧墖淇濆瓨鍚庝繚鐣欑粨鏋滈〉闈紝骞舵彁渚涢噸鏂版媿鎽勪笌淇敼鎻愮ず璇嶆搷浣滐紱`1.6.1` 鏂板 AI 浜嬪姟鍚庡彴澶勭悊銆佹偓娴獥銆佽繛缁潈闄愮敵璇峰強 AI 鐓х墖瀵煎叆锛沗1.6.2` 浼樺寲 AI 鐓х墖瀵煎叆鍏ュ彛鐨勫彲瑙佹€т笌甯冨眬锛沗1.6.3` 瀹屽杽 AI 浜嬪姟浜や簰涓庨噸璇曟祦绋嬶紱`1.6.4` 淇濆瓨瀹屾暣浜嬪姟閰嶇疆銆侀殧绂讳换鍔″師鍥俱€佸悓姝ラ噸璇曠姸鎬佸苟浼樺寲浜嬪姟缁撴潫杩斿洖鎬ц兘锛沗1.6.5` 鍏宠仈 AI/鍘熷浘鏂囦欢鍚嶅苟鏀寔鎷栧姩浜嬪姟鎮诞绐楋紱`1.7.0` 浼樺寲鎻愮ず璇嶉〉褰㈣薄/鏈嶈蹇€熷垏鎹€佷慨澶嶈崏绋夸簨鍔¤杩涘叆鐢熸垚鎬侊紝骞舵寜鏈嶅姟绔?Retry-After/鍐峰嵈鏃堕棿澶勭悊 429 閲嶈瘯銆?
 
 ---
 
-## 发版时必须改的地方（清单）
+## 鍙戠増鏃跺繀椤绘敼鐨勫湴鏂癸紙娓呭崟锛?
 
-### 1. Android 应用版本（必改）
+### 1. Android 搴旂敤鐗堟湰锛堝繀鏀癸級
 
-**文件：** `app/build.gradle.kts`
+**鏂囦欢锛?* `app/build.gradle.kts`
 
 ```kotlin
 defaultConfig {
-    versionCode = 11         // 整数，每次发版 +1（不可回退）
-    versionName = "1.4.3"    // 与用户沟通的版本号，与 tag 一致
+    versionCode = 11         // 鏁存暟锛屾瘡娆″彂鐗?+1锛堜笉鍙洖閫€锛?
+    versionName = "1.4.3"    // 涓庣敤鎴锋矡閫氱殑鐗堟湰鍙凤紝涓?tag 涓€鑷?
 }
 ```
 
-| 字段 | 作用 | 规则 |
+| 瀛楁 | 浣滅敤 | 瑙勫垯 |
 |------|------|------|
-| `versionName` | 显示给用户 | 改成新版本，如 `1.2`、`1.1.1` |
-| `versionCode` | 系统判断升级 | 每次发布 **+1**（1→2→3…） |
+| `versionName` | 鏄剧ず缁欑敤鎴?| 鏀规垚鏂扮増鏈紝濡?`1.2`銆乣1.1.1` |
+| `versionCode` | 绯荤粺鍒ゆ柇鍗囩骇 | 姣忔鍙戝竷 **+1**锛?鈫?鈫?鈥︼級 |
 
-同步 Gradle / 重新构建后，安装包元数据才会更新。
+鍚屾 Gradle / 閲嶆柊鏋勫缓鍚庯紝瀹夎鍖呭厓鏁版嵁鎵嶄細鏇存柊銆?
 
-### 2. 项目 VERSION 文件（必改）
+### 2. 椤圭洰 VERSION 鏂囦欢锛堝繀鏀癸級
 
-**文件：** `VERSION`（仓库根目录）
+**鏂囦欢锛?* `VERSION`锛堜粨搴撴牴鐩綍锛?
 
 ```
 1.1
 ```
 
-只写一行 versionName，方便脚本或文档引用。
+鍙啓涓€琛?versionName锛屾柟渚胯剼鏈垨鏂囨。寮曠敤銆?
 
-### 3. README（建议改）
+### 3. README锛堝缓璁敼锛?
 
-**文件：** `README.md`
+**鏂囦欢锛?* `README.md`
 
-- 文首「当前版本」
-- 「版本与发布」表格中的 versionName / versionCode / tag
+- 鏂囬銆屽綋鍓嶇増鏈€?
+- 銆岀増鏈笌鍙戝竷銆嶈〃鏍间腑鐨?versionName / versionCode / tag
 
-### 4. Git 提交与标签（发版必做）
+### 4. Git 鎻愪氦涓庢爣绛撅紙鍙戠増蹇呭仛锛?
 
 ```bash
-# 1. 提交所有改动（含上面的版本文件）
+# 1. 鎻愪氦鎵€鏈夋敼鍔紙鍚笂闈㈢殑鐗堟湰鏂囦欢锛?
 git add -A
-git commit -m "Release 1.1: …"
+git commit -m "Release 1.1: 鈥?
 
-# 2. 打 tag（与 versionName 一致）
+# 2. 鎵?tag锛堜笌 versionName 涓€鑷达級
 git tag -a 1.1 -m "v1.1"
 
-# 3. 推送分支与标签
+# 3. 鎺ㄩ€佸垎鏀笌鏍囩
 git push origin main
 git push origin 1.1
 ```
 
-GitHub 上可再「Create release」关联该 tag。
+GitHub 涓婂彲鍐嶃€孋reate release銆嶅叧鑱旇 tag銆?
 
 ---
 
-## 不需要改版本号的地方
+## 涓嶉渶瑕佹敼鐗堟湰鍙风殑鍦版柟
 
-| 位置 | 原因 |
+| 浣嶇疆 | 鍘熷洜 |
 |------|------|
-| `build.gradle.kts`（根）里 AGP / Kotlin 插件版本 | 那是构建工具版本，不是 App 版本 |
-| `gradle/wrapper`、`dependencies { … }` | 依赖库版本 |
-| `compileSdk` / `targetSdk` / `minSdk` | SDK 级别，与 App 版本独立 |
-| `AndroidManifest.xml` | 未写 `android:versionName`；由 Gradle 注入 |
-| XML 头 `<?xml version="1.0"?>` | XML 规范版本，无关 App |
-| 代码里业务常量（除非你做了「关于」页读死字符串） | 当前从 `BuildConfig`/Gradle 生成，不必手写 |
+| `build.gradle.kts`锛堟牴锛夐噷 AGP / Kotlin 鎻掍欢鐗堟湰 | 閭ｆ槸鏋勫缓宸ュ叿鐗堟湰锛屼笉鏄?App 鐗堟湰 |
+| `gradle/wrapper`銆乣dependencies { 鈥?}` | 渚濊禆搴撶増鏈?|
+| `compileSdk` / `targetSdk` / `minSdk` | SDK 绾у埆锛屼笌 App 鐗堟湰鐙珛 |
+| `AndroidManifest.xml` | 鏈啓 `android:versionName`锛涚敱 Gradle 娉ㄥ叆 |
+| XML 澶?`<?xml version="1.0"?>` | XML 瑙勮寖鐗堟湰锛屾棤鍏?App |
+| 浠ｇ爜閲屼笟鍔″父閲忥紙闄ら潪浣犲仛浜嗐€屽叧浜庛€嶉〉璇绘瀛楃涓诧級 | 褰撳墠浠?`BuildConfig`/Gradle 鐢熸垚锛屼笉蹇呮墜鍐?|
 
 ---
 
-## 可选：代码里读取版本
+## 鍙€夛細浠ｇ爜閲岃鍙栫増鏈?
 
-若「关于」页要显示版本，优先：
+鑻ャ€屽叧浜庛€嶉〉瑕佹樉绀虹増鏈紝浼樺厛锛?
 
 ```kotlin
-// 需在 build.gradle.kts 开启 buildConfig（AGP 8+ 默认可能需显式 buildFeatures { buildConfig = true }）
+// 闇€鍦?build.gradle.kts 寮€鍚?buildConfig锛圓GP 8+ 榛樿鍙兘闇€鏄惧紡 buildFeatures { buildConfig = true }锛?
 val name = BuildConfig.VERSION_NAME
 val code = BuildConfig.VERSION_CODE
 ```
 
-**不要**再在 Kotlin 里写死 `"1.1"`，避免与 Gradle 不一致。
+**涓嶈**鍐嶅湪 Kotlin 閲屽啓姝?`"1.1"`锛岄伩鍏嶄笌 Gradle 涓嶄竴鑷淬€?
 
 ---
 
-## 推荐发版流程（摘要）
+## 鎺ㄨ崘鍙戠増娴佺▼锛堟憳瑕侊級
 
-1. 改 `app/build.gradle.kts` 的 `versionName` + `versionCode`
-2. 改根目录 `VERSION`
-3. 更新 `README.md` 版本说明
-4. `assembleDebug` / `assembleRelease` 自测
-5. `git commit` → `git tag` → `git push` + `git push --tags`
-6. （可选）GitHub Release 附 APK 与更新说明
+1. 鏀?`app/build.gradle.kts` 鐨?`versionName` + `versionCode`
+2. 鏀规牴鐩綍 `VERSION`
+3. 鏇存柊 `README.md` 鐗堟湰璇存槑
+4. `assembleDebug` / `assembleRelease` 鑷祴
+5. `git commit` 鈫?`git tag` 鈫?`git push` + `git push --tags`
+6. 锛堝彲閫夛級GitHub Release 闄?APK 涓庢洿鏂拌鏄?
 
 ---
 
-## versionName 怎么升
+## versionName 鎬庝箞鍗?
 
-| 变更类型 | 示例 | 说明 |
+| 鍙樻洿绫诲瀷 | 绀轰緥 | 璇存槑 |
 |----------|------|------|
-| 大改版 / 不兼容 | `1.x` → `2.0` | 重大交互或架构变化 |
-| 功能更新 | `1.1` → `1.2` | 新功能、布局大改 |
-| 修 bug / 小改 | `1.1` → `1.1.1` | 可选第三位 |
+| 澶ф敼鐗?/ 涓嶅吋瀹?| `1.x` 鈫?`2.0` | 閲嶅ぇ浜や簰鎴栨灦鏋勫彉鍖?|
+| 鍔熻兘鏇存柊 | `1.1` 鈫?`1.2` | 鏂板姛鑳姐€佸竷灞€澶ф敼 |
+| 淇?bug / 灏忔敼 | `1.1` 鈫?`1.1.1` | 鍙€夌涓変綅 |
 
-`versionCode` 不论上面哪一种，**每次对外发布都 +1**。
+`versionCode` 涓嶈涓婇潰鍝竴绉嶏紝**姣忔瀵瑰鍙戝竷閮?+1**銆?
 
 ---
 
-## 检查命令
+## 妫€鏌ュ懡浠?
 
 ```bash
-# 看 Gradle 配置的版本
+# 鐪?Gradle 閰嶇疆鐨勭増鏈?
 rg "version(Code|Name)" app/build.gradle.kts
 
-# 看已有 tag
+# 鐪嬪凡鏈?tag
 git tag -l
 
-# 看远程 tag
+# 鐪嬭繙绋?tag
 git ls-remote --tags origin
 ```

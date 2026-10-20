@@ -77,6 +77,8 @@ import com.example.mikucamera.ai.AiPromptBuilder
 import com.example.mikucamera.ai.AiOutfitStyle
 import com.example.mikucamera.ai.AiServicePreset
 import com.example.mikucamera.ai.AiSettingsStore
+import com.example.mikucamera.ui.MikuUi
+import com.example.mikucamera.ai.AiResolution
 import com.example.mikucamera.ai.AiVisualStyle
 import com.example.mikucamera.data.PresetStore
 import com.example.mikucamera.location.LocationFormatter
@@ -101,14 +103,16 @@ import kotlin.math.roundToInt
 class MainActivity : AppCompatActivity() {
     private enum class CameraMode { NORMAL, AI }
     private enum class AiStage { CAPTURE, PROMPT, GENERATING, RESULT }
+    private enum class AiCaptureTarget { ORIGINAL, REFERENCE }
 
     private data class AiSession(
-        val originalFile: File,
+        var originalFile: File,
         var captureTime: String,
         var captureLocation: String,
         var resultFile: File? = null,
         var resultSaved: Boolean = false,
-        var transactionId: String? = null
+        var transactionId: String? = null,
+        var referenceFile: File? = null
     )
 
     private lateinit var root: View
@@ -121,17 +125,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var captureControls: View
     private lateinit var editorControls: View
     private lateinit var flashButton: View
-    private lateinit var flashIcon: TextView
+    private lateinit var flashIcon: ImageView
     private lateinit var flashBadge: TextView
     private lateinit var switchCameraButton: ImageButton
     private lateinit var captureButton: ImageButton
     private lateinit var normalLeftTools: View
     private lateinit var aiLeftTools: View
-    private lateinit var selectWatermarkButton: TextView
-    private lateinit var aiModeButton: TextView
-    private lateinit var aboutButton: TextView
-    private lateinit var aiBackButton: TextView
-    private lateinit var aiSettingsButton: TextView
+    private lateinit var selectWatermarkButton: ImageView
+    private lateinit var aiModeButton: ImageView
+    private lateinit var aboutButton: ImageView
+    private lateinit var aiBackButton: ImageView
+    private lateinit var aiSettingsButton: ImageView
     private lateinit var aiCaptureProgressBar: View
     private lateinit var locationStatusView: TextView
     private lateinit var recentPhotoView: ImageView
@@ -143,8 +147,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var watermarkNameEditText: EditText
     private lateinit var focusExposure: FocusExposureView
     private lateinit var aiPageHost: View
-    private lateinit var aiPageBackButton: TextView
-    private lateinit var aiPageSettingsButton: TextView
+    private lateinit var aiPageBackButton: ImageView
+    private lateinit var aiPageSettingsButton: ImageView
     private lateinit var aiPromptPanel: View
     private lateinit var aiGeneratingPanel: View
     private lateinit var aiResultPanel: View
@@ -152,6 +156,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiResultActions: View
     private lateinit var aiResultPostSaveActions: View
     private lateinit var aiOriginalPreview: ImageView
+    private lateinit var aiReferencePreview: ImageView
+    private lateinit var aiReferenceEmptyHint: TextView
+    private lateinit var aiReferenceClearButton: TextView
+    private lateinit var aiShootOriginalButton: MaterialButton
+    private lateinit var aiImportOriginalButton: MaterialButton
+    private lateinit var aiShootReferenceButton: MaterialButton
+    private lateinit var aiImportReferenceButton: MaterialButton
     private lateinit var aiResultPreview: ImageView
     private lateinit var aiPromptEditText: EditText
     private lateinit var aiVisualStyleText: TextView
@@ -195,6 +206,9 @@ class MainActivity : AppCompatActivity() {
     private var recentPhotoUri: Uri? = null
     private var cameraMode = CameraMode.NORMAL
     private var aiStage = AiStage.CAPTURE
+    private var aiCaptureTarget = AiCaptureTarget.ORIGINAL
+    private var returningToPromptOnCancelCapture = false
+    private var onPresetReferenceUpdated: (() -> Unit)? = null
     private var aiSession: AiSession? = null
     @Volatile private var aiGenerationId = 0L
     private var lastAiDebugLog = ""
@@ -217,8 +231,14 @@ class MainActivity : AppCompatActivity() {
     private var exposureMax = 0
     private var boundViewfinderWidth = 0
     private var boundViewfinderHeight = 0
+    private var statusBarInsetTop = 0
     private var navBarInsetBottom = 0
     private var lockedBottomHeight = 0
+    private var stoppedToBackground = false
+    private var launchingInternalIntent = false
+
+    private fun topSafeMarginPx(): Int = maxOf(statusBarInsetTop + (6 * density).roundToInt(), (42 * density).roundToInt())
+    private fun bottomSafeMarginPx(): Int = maxOf(navBarInsetBottom, 50)
 
     private val orientationListener by lazy {
         object : OrientationEventListener(this) {
@@ -235,20 +255,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        if (grants[Manifest.permission.CAMERA] != true) toast("需要相机权限才能拍照")
-        continuePermissionSequence()
-    }
-    private val locationPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        // GPS is independent of the watermark "地点" display switch.
-        if (grants.values.any { it }) {
+    private val startupPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (!hasCameraPermission() && grants[Manifest.permission.CAMERA] == false) {
+            toast("需要相机权限才能拍照")
+        }
+        if (hasLocationPermission()) {
             requestLocation(silent = true)
-        } else {
+        } else if (
+            grants[Manifest.permission.ACCESS_FINE_LOCATION] == false &&
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == false
+        ) {
             toast("未授予定位权限，地点水印可能无法显示地址")
         }
-        continuePermissionSequence()
-    }
-    private val photoPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         continuePermissionSequence()
     }
     private val pngPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -274,6 +292,7 @@ class MainActivity : AppCompatActivity() {
         hideStatusBar()
         setContentView(R.layout.activity_main)
         bindViews()
+        applyMikuDesign()
         bindActions()
         bindBackNavigation()
         enterCameraMode()
@@ -281,6 +300,10 @@ class MainActivity : AppCompatActivity() {
         restoreLastSelectedPreset()
         loadLatestPhoto()
         restoreAiSessionIfNeeded()
+        if (aiSession == null && aiSettingsStore.load().startInAiMode) {
+            aiSettingsStore.acceptUploadNotice()
+            enterAiCaptureStage()
+        }
         continuePermissionSequence()
         AiOverlayService.refresh(this)
         intent.getStringExtra(EXTRA_AI_TRANSACTION_ID)?.let(::openAiTransaction)
@@ -289,9 +312,12 @@ class MainActivity : AppCompatActivity() {
     /** Immersive camera UI: status bar hidden so the viewfinder is not framed by system chrome. */
     private fun hideStatusBar() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = Color.BLACK
-        window.navigationBarColor = Color.BLACK
+        window.statusBarColor = MikuUi.background
+        window.navigationBarColor = if (Build.VERSION.SDK_INT >= 27) MikuUi.background else MikuUi.ink
+        if (Build.VERSION.SDK_INT >= 29) window.decorView.isForceDarkAllowed = false
         val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.isAppearanceLightNavigationBars = true
+        controller.isAppearanceLightStatusBars = true
         controller.hide(WindowInsetsCompat.Type.statusBars())
         controller.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -340,6 +366,13 @@ class MainActivity : AppCompatActivity() {
         aiResultActions = findViewById(R.id.aiResultActions)
         aiResultPostSaveActions = findViewById(R.id.aiResultPostSaveActions)
         aiOriginalPreview = findViewById(R.id.aiOriginalPreview)
+        aiReferencePreview = findViewById(R.id.aiReferencePreview)
+        aiReferenceEmptyHint = findViewById(R.id.aiReferenceEmptyHint)
+        aiReferenceClearButton = findViewById(R.id.aiReferenceClearButton)
+        aiShootOriginalButton = findViewById(R.id.aiShootOriginalButton)
+        aiImportOriginalButton = findViewById(R.id.aiImportOriginalButton)
+        aiShootReferenceButton = findViewById(R.id.aiShootReferenceButton)
+        aiImportReferenceButton = findViewById(R.id.aiImportReferenceButton)
         aiResultPreview = findViewById(R.id.aiResultPreview)
         aiPromptEditText = findViewById(R.id.aiPromptEditText)
         aiVisualStyleText = findViewById(R.id.aiVisualStyleText)
@@ -361,18 +394,21 @@ class MainActivity : AppCompatActivity() {
         createFocusExposureView()
 
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            statusBarInsetTop = bars.top
             navBarInsetBottom = bars.bottom
             val side = (16 * density).roundToInt()
-            // Floating tools on preview; shutter padding stays inside the 9:16 stage
-            // (nav-bar inset is absorbed by the outer letterbox, not the stage).
-            cameraControls.setPadding(side, 0, side, (12 * density).roundToInt())
+            // Floating tools on preview; shutter padding stays inside the middle-lower stage
+            // (bottom safe margin is ~50px above the screen edge).
+            cameraControls.setPadding(side, 0, side, (8 * density).roundToInt())
             val pad = (6 * density).roundToInt()
             captureControls.setPadding(side / 2, pad, side / 2, pad)
-            editorControls.setPadding(side / 2, pad, side / 2, pad)
+            editorControls.setPadding(side, pad, side, pad)
+            aiPageHost.setPadding(0, topSafeMarginPx(), 0, bottomSafeMarginPx())
             root.post { layoutViewfinder() }
             insets
         }
+        aiPageHost.setPadding(0, topSafeMarginPx(), 0, bottomSafeMarginPx())
         ViewCompat.requestApplyInsets(root)
 
         viewfinderHost.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
@@ -394,12 +430,12 @@ class MainActivity : AppCompatActivity() {
      * Device-independent layout:
      *
      * ```
-     * [ black letterbox ]             ← equal top/bottom, outside the stage
-     * [ 9:16 content stage ]          ← centered on screen, full width
-     *     [ topBar: 🌸 / ⚡ ]         ← outside FOV
+     * [ top natural extension ]       ← background extends to top (away from hole-punch)
+     * [ middle-lower content stage ]  ← full width, gathered toward lower area
+     *     [ topBar: 4 icons ]         ← outside FOV, immediately above viewfinder
      *     [ 3:4 viewfinder ]          ← capture FOV only (所见即所得)
-     *     [ bottom chrome ]           ← shutter / editor
-     * [ black letterbox ]
+     *     [ bottom chrome ]           ← shutter / editor, immediately below viewfinder
+     * [ ~50px bottom safe margin ]    ← rounded corner clearance
      * ```
      */
     private fun layoutViewfinder() {
@@ -407,20 +443,11 @@ class MainActivity : AppCompatActivity() {
         val rootH = root.height
         if (rootW <= 0 || rootH <= 0) return
 
-        // --- 9:16 stage, full width, vertically centered ---
         val stageW = rootW
-        val stageHIdeal = (stageW * 16f / 9f).roundToInt()
-        val stageH = stageHIdeal.coerceAtMost(rootH)
-        val stageTop = ((rootH - stageH) / 2f).roundToInt()
-
-        contentStage.layoutParams = FrameLayout.LayoutParams(stageW, stageH).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            topMargin = stageTop
-        }
-
-        // --- Top tool bar (outside FOV) ---
         val widthSpec = View.MeasureSpec.makeMeasureSpec(stageW, View.MeasureSpec.EXACTLY)
         val unspec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+
+        // --- Top tool bar (outside FOV) ---
         cameraControls.measure(widthSpec, unspec)
         // Keep a stable top bar even when hidden in editor (INVISIBLE keeps measure).
         val topH = cameraControls.measuredHeight.coerceAtLeast((52 * density).roundToInt())
@@ -440,8 +467,23 @@ class MainActivity : AppCompatActivity() {
         // never participates in the FOV calculation.
         val vfW = stageW
         val idealVfH = (vfW * 4f / 3f).roundToInt()
+
+        val bottomMargin = bottomSafeMarginPx()
+        val minTopMargin = (48 * density).roundToInt()
+        val availableH = (rootH - bottomMargin - minTopMargin).coerceAtLeast(1)
+
+        val idealStageH = topH + idealVfH + bottomH
+        val stageH = idealStageH.coerceAtMost(availableH)
+        val stageTop = (rootH - bottomMargin - stageH).coerceAtLeast(minTopMargin)
+
+        contentStage.layoutParams = FrameLayout.LayoutParams(stageW, stageH).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin = stageTop
+        }
+
         val maxVfH = (stageH - topH - bottomH).coerceAtLeast(1)
         val vfH = idealVfH.coerceAtMost(maxVfH)
+        val actualBottomH = (stageH - topH - vfH).coerceAtLeast(bottomH)
 
         cameraControls.layoutParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -451,7 +493,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewfinderHost.layoutParams = FrameLayout.LayoutParams(vfW, vfH).apply {
-            gravity = Gravity.TOP
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             topMargin = topH
         }
 
@@ -466,7 +508,7 @@ class MainActivity : AppCompatActivity() {
 
         bottomChrome.layoutParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
-            bottomH
+            actualBottomH
         ).apply {
             gravity = Gravity.BOTTOM
         }
@@ -501,6 +543,129 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
     }
 
+    private fun dp(value: Int) = MikuUi.dp(this, value)
+
+    private fun applyMikuDesign() {
+        viewfinderHost.setBackgroundColor(Color.BLACK)
+        viewfinderHost.clipToOutline = false
+        MikuUi.styleTree(editorControls)
+        MikuUi.styleTree(aiPageHost)
+        MikuUi.button(findViewById(R.id.uploadButton), false)
+        MikuUi.button(findViewById(R.id.cancelEditButton), false)
+        MikuUi.button(findViewById(R.id.saveWatermarkButton), true)
+        MikuUi.dangerButton(findViewById(R.id.deleteWatermarkButton))
+        MikuUi.dangerButton(findViewById(R.id.aiCancelGenerationButton))
+        MikuUi.button(findViewById(R.id.aiGenerateAllButton), false)
+        MikuUi.button(findViewById(R.id.aiGenerateButton), true)
+        MikuUi.button(aiShootOriginalButton, false)
+        MikuUi.button(aiImportOriginalButton, false)
+        MikuUi.button(aiShootReferenceButton, false)
+        MikuUi.button(aiImportReferenceButton, false)
+        MikuUi.button(findViewById(R.id.aiSaveBothButton), true)
+        MikuUi.editText(watermarkNameEditText, 12)
+        watermarkNameEditText.setPadding(dp(12), 0, dp(12), 0)
+        MikuUi.editText(aiPromptEditText, 14)
+        MikuUi.switch(timeSwitch)
+        MikuUi.switch(locationSwitch)
+        MikuUi.switch(streetSwitch)
+        MikuUi.switch(aiTimeWatermarkSwitch)
+        MikuUi.switch(aiLocationWatermarkSwitch)
+        MikuUi.seekBar(outlineSeekBar)
+        listOf(aiOriginalPreview, aiReferencePreview, aiResultPreview).forEach { it.clipToOutline = true }
+        MikuUi.toolbarIcon(aiPageBackButton, false)
+        MikuUi.toolbarIcon(aiPageSettingsButton, false)
+        MikuUi.toolbarIcon(aiBackButton, false)
+        MikuUi.toolbarIcon(aiSettingsButton, false)
+        updateCameraModeButtons()
+    }
+
+    private fun updateCameraModeButtons() {
+        MikuUi.toolbarIcon(selectWatermarkButton, cameraMode == CameraMode.NORMAL)
+        MikuUi.toolbarIcon(aiModeButton, cameraMode == CameraMode.AI)
+        MikuUi.toolbarIcon(aboutButton, false)
+    }
+
+    private fun startAllCombinations() {
+        val session = aiSession ?: return
+        val config = currentGenerationConfiguration()
+        val settings = aiSettingsStore.load()
+        if (settings.profiles.firstOrNull { it.id == config.profileId }?.apiKey.isNullOrBlank()) {
+            toast("请先设置 API Key"); showAiApiProfilesDialog(); return
+        }
+        val prompt = aiPromptEditText.text.toString().trim()
+        val time = session.captureTime
+        val location = session.captureLocation
+        val includeTime = aiTimeWatermarkSwitch.isChecked
+        val includeLocation = aiLocationWatermarkSwitch.isChecked
+        val source = session.originalFile
+        val refSource = session.referenceFile
+        val allButton = findViewById<MaterialButton>(R.id.aiGenerateAllButton)
+        allButton.isEnabled = false
+        aiExecutor.execute {
+            val created = mutableListOf<AiTransaction>()
+            try {
+                config.allCombinations().forEach { combination ->
+                        created += createAiTransactionSnapshot(source, time, location, prompt, includeTime, includeLocation,
+                            combination, referenceSource = refSource)
+                }
+                runOnUiThread {
+                    allButton.isEnabled = true
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    created.forEach { task ->
+                        aiTransactionStore.update(task.id) { it.copy(state = AiTransactionState.RUNNING, attemptCount = 1, message = "已加入生成队列") }
+                        AiGenerationService.start(this, task.id)
+                    }
+                    session.transactionId?.let { id ->
+                        if (aiTransactionStore.get(id)?.attemptCount == 0) aiTransactionStore.remove(id)
+                    }
+                    aiSessionStore.clear(deleteFiles = false)
+                    aiSession = null
+                    enterAiCaptureStage()
+                    AiOverlayService.refresh(this)
+                    toast("已创建 4 个搭配任务")
+                    showTaskList()
+                }
+            } catch (error: Exception) {
+                created.forEach { aiTransactionStore.remove(it.id) }
+                runOnUiThread { allButton.isEnabled = true; toast("创建失败：${error.message}") }
+            }
+        }
+    }
+
+    private fun showTaskList() {
+        val dialog = BottomSheetDialog(this)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), bottomSafeMarginPx())
+            background = MikuUi.rounded(this@MainActivity, MikuUi.background, 24)
+        }
+        content.addView(TextView(this).apply { text = "生成任务"; textSize = 21f; setTextColor(MikuUi.ink) })
+        val tasks = aiTransactionStore.all()
+        if (tasks.isEmpty()) content.addView(TextView(this).apply {
+            text = "还没有任务，拍一张照片开始吧"; setPadding(0, dp(16), 0, dp(16)); setTextColor(MikuUi.muted)
+        })
+        tasks.forEach { task ->
+            val config = task.configuration
+            val state = when(task.state) {
+                AiTransactionState.DRAFT -> "待生成"
+                AiTransactionState.RUNNING -> "生成中"
+                AiTransactionState.SUCCESS -> "已完成"
+                AiTransactionState.FAILED -> "未完成"
+            }
+            content.addView(MaterialButton(this).apply {
+                text = "${config?.visualStyle?.displayName.orEmpty()} · ${config?.outfitStyle?.displayName.orEmpty()} · ${config?.resolution?.label ?: "2K"}  /  $state"
+                MikuUi.button(this); maxLines = 2
+                setOnClickListener { dialog.dismiss(); openAiTransaction(task.id) }
+            }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(8) })
+        }
+        content.addView(MaterialButton(this).apply {
+            text = "刷新状态"; MikuUi.button(this, true)
+            setOnClickListener { dialog.dismiss(); showTaskList() }
+        }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
+        dialog.setContentView(ScrollView(this).apply { addView(content) })
+        dialog.show()
+    }
+
     private fun bindActions() {
         previewView.setOnTouchListener { _, event -> handlePreviewTouch(event) }
         flashButton.setOnClickListener {
@@ -523,19 +688,45 @@ class MainActivity : AppCompatActivity() {
         }
         captureButton.setOnClickListener { capturePhoto() }
         aiImportButton.setOnClickListener {
+            launchingInternalIntent = true
             aiPhotoPicker.launch(
                 androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
             )
         }
         recentPhotoView.setOnClickListener { openRecentPhoto() }
-        selectWatermarkButton.setOnClickListener { showWatermarkChooser() }
-        aiModeButton.setOnClickListener { requestEnterAiMode() }
-        aboutButton.setOnClickListener { showAboutDialog() }
+        selectWatermarkButton.setOnClickListener {
+            if (cameraMode == CameraMode.AI) {
+                requestExitAiMode()
+            } else {
+                showWatermarkChooser()
+            }
+        }
+        aiModeButton.setOnClickListener {
+            if (cameraMode != CameraMode.AI) {
+                requestEnterAiMode()
+            }
+        }
+        aboutButton.setOnClickListener { showAiSettingsHome() }
         aiBackButton.setOnClickListener { requestExitAiMode() }
         aiSettingsButton.setOnClickListener { showAiSettingsHome() }
         aiPageBackButton.setOnClickListener { requestExitAiMode() }
         aiPageSettingsButton.setOnClickListener { showAiSettingsHome() }
         findViewById<MaterialButton>(R.id.aiRetakeButton).setOnClickListener { returnToAiCapture() }
+        aiShootOriginalButton.setOnClickListener { startPromptOriginalCapture() }
+        aiImportOriginalButton.setOnClickListener {
+            launchingInternalIntent = true
+            aiOriginalReplacePicker.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
+        aiShootReferenceButton.setOnClickListener { startPromptReferenceCapture() }
+        aiImportReferenceButton.setOnClickListener {
+            launchingInternalIntent = true
+            aiReferencePicker.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
+        aiReferenceClearButton.setOnClickListener { clearCurrentReferenceImage() }
         findViewById<MaterialButton>(R.id.aiGenerateButton).setOnClickListener { startAiGeneration() }
         findViewById<MaterialButton>(R.id.aiCancelGenerationButton).setOnClickListener { cancelAiGeneration() }
         findViewById<MaterialButton>(R.id.aiEditPromptDuringGenerationButton).setOnClickListener { editPromptWhileGenerating() }
@@ -557,11 +748,18 @@ class MainActivity : AppCompatActivity() {
                 else -> true
             }
         }
-        aiVisualStyleToggleButton.setOnClickListener { toggleAiVisualStyle() }
-        aiOutfitStyleToggleButton.setOnClickListener { toggleAiOutfitStyle() }
+        aiVisualStyleToggleButton.setOnClickListener { selectGenerationOptions(visual = AiVisualStyle.ANIME) }
+        findViewById<MaterialButton>(R.id.aiRealisticButton).setOnClickListener { selectGenerationOptions(visual = AiVisualStyle.REALISTIC) }
+        aiOutfitStyleToggleButton.setOnClickListener { selectGenerationOptions(outfit = AiOutfitStyle.OFFICIAL) }
+        findViewById<MaterialButton>(R.id.aiAdaptiveButton).setOnClickListener { selectGenerationOptions(outfit = AiOutfitStyle.SCENE_ADAPTIVE) }
+        listOf(R.id.aiResolution1, R.id.aiResolution2, R.id.aiResolution4).zip(AiResolution.entries).forEach { (id, resolution) ->
+            findViewById<MaterialButton>(id).setOnClickListener { selectGenerationOptions(resolution = resolution) }
+        }
+        findViewById<MaterialButton>(R.id.aiGenerateAllButton).setOnClickListener { startAllCombinations() }
         aiTimeEditText.setOnClickListener { editAiMetadata(time = true) }
         aiLocationEditText.setOnClickListener { editAiMetadata(time = false) }
         findViewById<MaterialButton>(R.id.uploadButton).setOnClickListener {
+            launchingInternalIntent = true
             pngPicker.launch(arrayOf("image/png"))
         }
         findViewById<MaterialButton>(R.id.cancelEditButton).setOnClickListener { cancelEditor() }
@@ -591,7 +789,15 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (cameraMode == CameraMode.AI) {
-                    requestExitAiMode()
+                    if (aiStage == AiStage.CAPTURE && returningToPromptOnCancelCapture && aiSession != null) {
+                        returningToPromptOnCancelCapture = false
+                        aiCaptureTarget = AiCaptureTarget.ORIGINAL
+                        showAiPromptStage(resetPrompt = false)
+                    } else if (aiStage == AiStage.CAPTURE && aiSettingsStore.load().startInAiMode) {
+                        finish()
+                    } else {
+                        requestExitAiMode()
+                    }
                 } else if (editing) {
                     cancelEditor()
                 } else {
@@ -599,6 +805,55 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    private fun startPromptOriginalCapture() {
+        aiCaptureTarget = AiCaptureTarget.ORIGINAL
+        returningToPromptOnCancelCapture = aiSession != null
+        enterAiCaptureStage()
+        toast("请拍摄新的原图")
+    }
+
+    private fun startPromptReferenceCapture() {
+        aiCaptureTarget = AiCaptureTarget.REFERENCE
+        returningToPromptOnCancelCapture = true
+        enterAiCaptureStage()
+        toast("请拍摄形象参考图")
+    }
+
+    private fun updateAiReferencePreview() {
+        val ref = aiSession?.referenceFile?.takeIf { it.isFile && it.length() > 0L }
+        aiReferencePreview.setImageURI(null)
+        if (ref != null) {
+            aiReferencePreview.setImageURI(Uri.fromFile(ref))
+            aiReferenceEmptyHint.visibility = View.GONE
+            aiReferenceClearButton.visibility = View.VISIBLE
+        } else {
+            aiReferenceEmptyHint.visibility = View.VISIBLE
+            aiReferenceClearButton.visibility = View.GONE
+        }
+    }
+
+    private fun clearCurrentReferenceImage() {
+        val session = aiSession ?: return
+        session.referenceFile?.delete()
+        session.referenceFile = null
+        session.transactionId?.let { id ->
+            val oldTask = aiTransactionStore.get(id)
+            oldTask?.referenceFile?.delete()
+            aiTransactionStore.update(id) { it.copy(referencePath = null) }
+        }
+        updateAiReferencePreview()
+        persistAiSession(stage = "PROMPT", prompt = aiPromptEditText.text.toString())
+    }
+
+    private fun prepareDefaultReferenceCopy(): File? {
+        val presetFile = aiSettingsStore.load().defaultReferenceFile ?: return null
+        return runCatching {
+            val copy = aiSessionStore.newFile("miku_ai_ref_", ".jpg")
+            presetFile.copyTo(copy, overwrite = true)
+            copy
+        }.getOrNull()
     }
 
     private fun requestEnterAiMode() {
@@ -622,6 +877,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun enterAiCaptureStage() {
         cameraMode = CameraMode.AI
+        updateCameraModeButtons()
         aiStage = AiStage.CAPTURE
         editing = false
         aiPageHost.visibility = View.GONE
@@ -630,8 +886,8 @@ class MainActivity : AppCompatActivity() {
         bottomChrome.visibility = View.VISIBLE
         captureControls.visibility = View.VISIBLE
         editorControls.visibility = View.GONE
-        normalLeftTools.visibility = View.GONE
-        aiLeftTools.visibility = View.VISIBLE
+        normalLeftTools.visibility = View.VISIBLE
+        aiLeftTools.visibility = View.GONE
         aiCaptureProgressBar.visibility = View.VISIBLE
         locationStatusView.visibility = View.VISIBLE
         flashButton.visibility = View.VISIBLE
@@ -674,6 +930,9 @@ class MainActivity : AppCompatActivity() {
         }
         aiOriginalPreview.setImageURI(null)
         aiOriginalPreview.setImageURI(Uri.fromFile(session.originalFile))
+        returningToPromptOnCancelCapture = false
+        aiCaptureTarget = AiCaptureTarget.ORIGINAL
+        updateAiReferencePreview()
         updateAiMetadataLabel()
         updateAiWorkflow(AiStage.PROMPT)
         persistAiSession(stage = "PROMPT", prompt = aiPromptEditText.text.toString())
@@ -684,11 +943,7 @@ class MainActivity : AppCompatActivity() {
         val settings = aiSettingsStore.load()
         val taskId = ensureAiTransaction(session)
         val existingTask = aiTransactionStore.get(taskId) ?: return toast("该事务已被清除")
-        val configuration = if (existingTask.attemptCount == 0) {
-            AiGenerationConfiguration.from(settings)
-        } else {
-            existingTask.configuration ?: AiGenerationConfiguration.from(settings)
-        }
+        val configuration = existingTask.configuration ?: AiGenerationConfiguration.from(settings)
         val credentialProfile = settings.profiles.firstOrNull { it.id == configuration.profileId }
         if (credentialProfile == null) {
             toast("该事务使用的 API 配置已被删除，请重新选择配置")
@@ -772,6 +1027,9 @@ class MainActivity : AppCompatActivity() {
             try {
                 val copy = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                 session.originalFile.copyTo(copy, overwrite = true)
+                val refCopy = session.referenceFile?.takeIf { it.isFile }?.let { ref ->
+                    aiSessionStore.newFile("miku_ai_ref_", ".jpg").also { ref.copyTo(it, overwrite = true) }
+                }
                 val task = createAiTransactionSnapshot(
                     source = copy,
                     captureTime = session.captureTime,
@@ -779,12 +1037,13 @@ class MainActivity : AppCompatActivity() {
                     prompt = prompt,
                     includeTime = includeTime,
                     includeLocation = includeLocation,
-                    configuration = sourceTask?.configuration
+                    configuration = sourceTask?.configuration,
+                    referenceSource = refCopy
                 )
                 runOnUiThread {
                     // The original task keeps its own file and continues in the background.
                     aiSessionStore.clear(deleteFiles = false)
-                    aiSession = AiSession(copy, session.captureTime, session.captureLocation, transactionId = task.id)
+                    aiSession = AiSession(copy, session.captureTime, session.captureLocation, transactionId = task.id, referenceFile = refCopy)
                     aiPromptEditText.setText(prompt)
                     showAiPromptStage()
                 }
@@ -821,6 +1080,9 @@ class MainActivity : AppCompatActivity() {
             try {
                 val originalCopy = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                 session.originalFile.copyTo(originalCopy, overwrite = true)
+                val refCopy = session.referenceFile?.takeIf { it.isFile }?.let { ref ->
+                    aiSessionStore.newFile("miku_ai_ref_", ".jpg").also { ref.copyTo(it, overwrite = true) }
+                }
                 val task = createAiTransactionSnapshot(
                     source = originalCopy,
                     captureTime = session.captureTime,
@@ -828,12 +1090,13 @@ class MainActivity : AppCompatActivity() {
                     prompt = prompt,
                     includeTime = includeTime,
                     includeLocation = includeLocation,
-                    configuration = previousTask?.configuration
+                    configuration = previousTask?.configuration,
+                    referenceSource = refCopy
                 )
                 runOnUiThread {
                     removeTransactionWithoutBlocking(session)
                     aiSessionStore.clear(deleteFiles = false)
-                    aiSession = AiSession(originalCopy, session.captureTime, session.captureLocation, transactionId = task.id)
+                    aiSession = AiSession(originalCopy, session.captureTime, session.captureLocation, transactionId = task.id, referenceFile = refCopy)
                     AiOverlayService.refresh(this@MainActivity)
                     showAiPromptStage()
                     setAiResultButtonsEnabled(true)
@@ -927,10 +1190,24 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         ContextCompat.registerReceiver(this, transactionReceiver, IntentFilter(AiTransactionStore.ACTION_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (stoppedToBackground && aiSession == null && !editing) {
+            val wantAi = aiSettingsStore.load().startInAiMode
+            if (wantAi && cameraMode != CameraMode.AI) {
+                aiSettingsStore.acceptUploadNotice()
+                enterAiCaptureStage()
+            } else if (!wantAi && cameraMode == CameraMode.AI && aiStage == AiStage.CAPTURE) {
+                exitAiMode(deleteSession = true)
+            }
+        }
+        stoppedToBackground = false
+        launchingInternalIntent = false
     }
 
     override fun onStop() {
         unregisterReceiver(transactionReceiver)
+        if (!isChangingConfigurations && !launchingInternalIntent) {
+            stoppedToBackground = true
+        }
         super.onStop()
     }
 
@@ -975,7 +1252,8 @@ class MainActivity : AppCompatActivity() {
             prompt = aiPromptEditText.text.toString().ifBlank { settings.defaultPrompt },
             includeTime = aiTimeWatermarkSwitch.isChecked,
             includeLocation = aiLocationWatermarkSwitch.isChecked,
-            configuration = AiGenerationConfiguration.from(settings)
+            configuration = AiGenerationConfiguration.from(settings),
+            referenceSource = session.referenceFile
         ).id.also { session.transactionId = it }
     }
 
@@ -988,11 +1266,18 @@ class MainActivity : AppCompatActivity() {
         includeTime: Boolean,
         includeLocation: Boolean,
         configuration: AiGenerationConfiguration? = null,
-        createdAt: Long = System.currentTimeMillis()
+        createdAt: Long = System.currentTimeMillis(),
+        referenceSource: File? = null
     ): AiTransaction {
         val transactionOriginal = aiTransactionStore.newFile("miku_ai_task_original_", ".jpg")
+        var transactionRef: File? = null
         try {
             source.copyTo(transactionOriginal, overwrite = true)
+            if (referenceSource != null && referenceSource.isFile && referenceSource.length() > 0L) {
+                transactionRef = aiTransactionStore.newFile("miku_ai_task_ref_", ".jpg").also {
+                    referenceSource.copyTo(it, overwrite = true)
+                }
+            }
             return aiTransactionStore.create(
                 AiTransaction(
                     originalPath = transactionOriginal.absolutePath,
@@ -1002,11 +1287,13 @@ class MainActivity : AppCompatActivity() {
                     includeTimeWatermark = includeTime,
                     includeLocationWatermark = includeLocation,
                     createdAt = createdAt,
-                    configuration = configuration ?: AiGenerationConfiguration.from(aiSettingsStore.load())
+                    configuration = configuration ?: AiGenerationConfiguration.from(aiSettingsStore.load()),
+                    referencePath = transactionRef?.absolutePath
                 )
             )
         } catch (error: Throwable) {
             transactionOriginal.delete()
+            transactionRef?.delete()
             throw error
         }
     }
@@ -1022,6 +1309,7 @@ class MainActivity : AppCompatActivity() {
             deleteAiSessionFiles(session)
             task?.originalFile?.delete()
             task?.resultFile?.delete()
+            task?.referenceFile?.delete()
             AiOverlayService.refresh(applicationContext)
         }
     }
@@ -1046,6 +1334,21 @@ class MainActivity : AppCompatActivity() {
         importAiPhoto(uri)
     }
 
+    private val aiOriginalReplacePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@registerForActivityResult
+        replaceCurrentOriginalPhoto(uri)
+    }
+
+    private val aiReferencePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@registerForActivityResult
+        importReferencePhoto(uri)
+    }
+
+    private val presetReferencePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@registerForActivityResult
+        importPresetReferencePhoto(uri)
+    }
+
     private fun updateAiResultActions() {
         aiResultSaveActions.visibility = View.VISIBLE
         aiResultActions.visibility = View.GONE
@@ -1054,7 +1357,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestExitAiMode() {
         when (aiStage) {
-            AiStage.CAPTURE -> exitAiMode(deleteSession = true)
+            AiStage.CAPTURE -> {
+                if (returningToPromptOnCancelCapture && aiSession != null) {
+                    returningToPromptOnCancelCapture = false
+                    aiCaptureTarget = AiCaptureTarget.ORIGINAL
+                    showAiPromptStage(resetPrompt = false)
+                } else {
+                    exitAiMode(deleteSession = true)
+                }
+            }
             AiStage.GENERATING -> AlertDialog.Builder(this)
                 .setTitle("退出 AI mode")
                 .setMessage("是否停止等待并放弃本次照片？服务端若已开始生成，本次请求仍可能产生费用。")
@@ -1089,6 +1400,7 @@ class MainActivity : AppCompatActivity() {
         aiSession = null
         aiGenerationId++
         cameraMode = CameraMode.NORMAL
+        updateCameraModeButtons()
         aiStage = AiStage.CAPTURE
         aiPageHost.visibility = View.GONE
         cameraControls.visibility = View.VISIBLE
@@ -1118,7 +1430,7 @@ class MainActivity : AppCompatActivity() {
                 active -> "● $text"
                 else -> "○ $text"
             }
-            view.setTextColor(if (active || complete) Color.parseColor("#62D5C6") else Color.parseColor("#77FFFFFF"))
+            view.setTextColor(if (active || complete) MikuUi.accentInk else MikuUi.muted)
             view.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
         style(aiCaptureStep, "拍照", stage == AiStage.CAPTURE)
@@ -1129,7 +1441,7 @@ class MainActivity : AppCompatActivity() {
         style(aiPagePromptStep, "提示词", stage == AiStage.PROMPT, complete = generatingOrResult)
         style(aiPageGenerateStep, "AI生成", generatingOrResult)
         aiPagePromptConnector.setBackgroundColor(
-            if (generatingOrResult) Color.parseColor("#62D5C6") else Color.parseColor("#55FFFFFF")
+            if (generatingOrResult) MikuUi.accent else MikuUi.border
         )
     }
 
@@ -1139,190 +1451,582 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAiImageSettingsDialog() {
         val current = aiSettingsStore.load()
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((20 * density).roundToInt(), 0, (20 * density).roundToInt(), 0)
-        }
-        val visualStyleGroup = RadioGroup(this).apply {
-            orientation = RadioGroup.HORIZONTAL
-        }
-        val animeButton = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = AiVisualStyle.ANIME.displayName
-        }
-        val realisticButton = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = AiVisualStyle.REALISTIC.displayName
-        }
-        visualStyleGroup.addView(animeButton)
-        visualStyleGroup.addView(realisticButton)
-        visualStyleGroup.check(if (current.visualStyle == AiVisualStyle.ANIME) animeButton.id else realisticButton.id)
+        var startAi = current.startInAiMode
+        val dialog = android.app.Dialog(this, R.style.Theme_MikuCamera)
 
-        val outfitStyleGroup = RadioGroup(this).apply {
-            orientation = RadioGroup.VERTICAL
-        }
-        val officialOutfitButton = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = AiOutfitStyle.OFFICIAL.displayName
-        }
-        val adaptiveOutfitButton = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = AiOutfitStyle.SCENE_ADAPTIVE.displayName
-        }
-        outfitStyleGroup.addView(officialOutfitButton)
-        outfitStyleGroup.addView(adaptiveOutfitButton)
-        outfitStyleGroup.check(
-            if (current.outfitStyle == AiOutfitStyle.OFFICIAL) officialOutfitButton.id else adaptiveOutfitButton.id
-        )
-        val promptInput = EditText(this).apply {
-            hint = "默认提示词"
-            setText(current.defaultPrompt)
-            gravity = Gravity.TOP or Gravity.START
-            minLines = 4
-            maxLines = 8
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        }
-        container.addView(TextView(this).apply { text = "形象风格"; setPadding(0, 20, 0, 0) })
-        container.addView(visualStyleGroup)
-        container.addView(TextView(this).apply { text = "服装风格"; setPadding(0, 16, 0, 0) })
-        container.addView(outfitStyleGroup)
-        container.addView(TextView(this).apply { text = "默认提示词"; setPadding(0, 20, 0, 0) })
-        container.addView(promptInput)
-        val timeSwitch = SwitchMaterial(this).apply { text = "生成时间水印"; isChecked = current.includeTimeWatermark }
-        val locationSwitch = SwitchMaterial(this).apply { text = "生成地点水印"; isChecked = current.includeLocationWatermark }
-        container.addView(TextView(this).apply { text = "AI 水印"; setPadding(0, 20, 0, 0) })
-        container.addView(timeSwitch)
-        container.addView(locationSwitch)
-        container.addView(TextView(this).apply {
-            text = "当前 API 配置：${current.activeProfile.name} · ${current.activeProfile.model}"
-            textSize = 12f
-            setPadding(0, 16, 0, 0)
-        })
-        val scrollView = ScrollView(this).apply {
+        val scroll = ScrollView(this).apply {
             isFillViewport = true
-            addView(container)
+            setBackgroundColor(MikuUi.background)
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("图像参数")
-            .setView(scrollView)
-            .setNegativeButton("取消", null)
-            .setNeutralButton("API 配置", null)
-            .setPositiveButton("保存", null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val prompt = promptInput.text.toString().trim().ifBlank { AiSettingsStore.DEFAULT_PROMPT }
-                val visualStyle = if (visualStyleGroup.checkedRadioButtonId == realisticButton.id) {
-                    AiVisualStyle.REALISTIC
-                } else AiVisualStyle.ANIME
-                val outfitStyle = if (outfitStyleGroup.checkedRadioButtonId == officialOutfitButton.id) {
-                    AiOutfitStyle.OFFICIAL
-                } else AiOutfitStyle.SCENE_ADAPTIVE
-                runCatching { aiSettingsStore.saveImageSettings(visualStyle, outfitStyle, prompt, timeSwitch.isChecked, locationSwitch.isChecked) }
-                    .onSuccess {
-                        updateAiMetadataLabel()
-                        toast("AI 设置已保存")
-                        dialog.dismiss()
-                    }
-                    .onFailure { toast("设置保存失败: ${it.message ?: "未知错误"}") }
+
+        // Extend top naturally below the punch-hole / status-bar line,
+        // and leave ~50px safe margin at the bottom.
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP
+            setBackgroundColor(MikuUi.background)
+            setPadding(dp(16), topSafeMarginPx(), dp(16), bottomSafeMarginPx())
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(8))
+        }
+        val backBtn = ImageView(this).apply {
+            setImageResource(R.drawable.ic_toolbar_back)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+            contentDescription = "返回"
+            isClickable = true
+            isFocusable = true
+            MikuUi.toolbarIcon(this, false)
+            setOnClickListener { dialog.dismiss() }
+        }
+        header.addView(backBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
+        header.addView(TextView(this).apply {
+            text = "相机设置"
+            textSize = 20f
+            setTextColor(MikuUi.ink)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(dp(14), 0, 0, 0)
+        })
+        page.addView(header)
+
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun section(title: String) {
+            content.addView(TextView(this).apply {
+                text = title
+                textSize = 13f
+                setTextColor(MikuUi.muted)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setPadding(0, dp(14), 0, dp(6))
+            })
+        }
+
+        val prompt = EditText(this).apply {
+            setText(current.defaultPrompt)
+            minLines = 3
+            maxLines = 6
+            gravity = Gravity.TOP
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            MikuUi.editText(this, 14)
+        }
+        val time = SwitchMaterial(this).apply {
+            text = "时间水印"
+            isChecked = current.includeTimeWatermark
+            minHeight = dp(44)
+            MikuUi.switch(this)
+        }
+        val location = SwitchMaterial(this).apply {
+            text = "地点水印"
+            isChecked = current.includeLocationWatermark
+            minHeight = dp(44)
+            MikuUi.switch(this)
+        }
+
+        fun saveNow() {
+            val promptText = prompt.text?.toString()?.trim()?.ifBlank { AiSettingsStore.DEFAULT_PROMPT }
+                ?: AiSettingsStore.DEFAULT_PROMPT
+            aiSettingsStore.savePreferences(startAi, promptText, time.isChecked, location.isChecked)
+        }
+
+        section("默认启动")
+        val modes = LinearLayout(this).apply {
+            background = MikuUi.bordered(this@MainActivity, MikuUi.soft, MikuUi.border, 14)
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+        val normal = MaterialButton(this).apply { text = "水印相机" }
+        val ai = MaterialButton(this).apply { text = "AI 模式" }
+        fun updateModes() {
+            MikuUi.button(normal, !startAi)
+            MikuUi.button(ai, startAi)
+        }
+        fun applyStartupModeSelection(enableAi: Boolean) {
+            startAi = enableAi
+            if (enableAi) aiSettingsStore.acceptUploadNotice()
+            updateModes()
+            saveNow()
+            if (aiSession == null && !editing) {
+                if (enableAi && cameraMode != CameraMode.AI) {
+                    enterAiCaptureStage()
+                } else if (!enableAi && cameraMode == CameraMode.AI && aiStage == AiStage.CAPTURE) {
+                    exitAiMode(deleteSession = true)
+                }
             }
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { dialog.dismiss(); showAiApiProfilesDialog() }
+        }
+        normal.setOnClickListener { applyStartupModeSelection(false) }
+        ai.setOnClickListener { applyStartupModeSelection(true) }
+        modes.addView(normal, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(4) })
+        modes.addView(ai, LinearLayout.LayoutParams(0, dp(42), 1f))
+        updateModes()
+        content.addView(modes)
+
+        section("默认提示词")
+        prompt.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) { saveNow() }
+        })
+        content.addView(prompt)
+
+        section("形象参考预设")
+        val presetRefCard = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = MikuUi.bordered(this@MainActivity, MikuUi.surface, MikuUi.border, 14)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        val presetThumb = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = MikuUi.rounded(this@MainActivity, MikuUi.soft, 10)
+            clipToOutline = true
+        }
+        presetRefCard.addView(presetThumb, LinearLayout.LayoutParams(dp(54), dp(54)).apply { marginEnd = dp(12) })
+        val presetInfoCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val presetTitle = TextView(this).apply {
+            text = "默认形象参考图"
+            textSize = 14f
+            setTextColor(MikuUi.ink)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        val presetDesc = TextView(this).apply {
+            textSize = 12f
+            setTextColor(MikuUi.muted)
+            setPadding(0, dp(2), 0, 0)
+        }
+        presetInfoCol.addView(presetTitle)
+        presetInfoCol.addView(presetDesc)
+        presetRefCard.addView(presetInfoCol, LinearLayout.LayoutParams(0, -2, 1f))
+
+        val presetClearBtn = MaterialButton(this).apply {
+            text = "清除"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(10), 0, dp(10), 0)
+            MikuUi.dangerButton(this)
+        }
+        val presetSelectBtn = MaterialButton(this).apply {
+            text = "导入"
+            textSize = 12f
+            minWidth = 0
+            setPadding(dp(12), 0, dp(12), 0)
+            MikuUi.button(this, true)
+            setOnClickListener {
+                launchingInternalIntent = true
+                presetReferencePicker.launch(
+                    androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            }
+        }
+        presetRefCard.addView(presetClearBtn, LinearLayout.LayoutParams(-2, dp(36)).apply { marginEnd = dp(6) })
+        presetRefCard.addView(presetSelectBtn, LinearLayout.LayoutParams(-2, dp(36)))
+
+        fun refreshPresetRefUi() {
+            val file = aiSettingsStore.load().defaultReferenceFile
+            presetThumb.setImageURI(null)
+            if (file != null) {
+                presetThumb.setImageURI(Uri.fromFile(file))
+                presetDesc.text = "已设置预设，提示词页将默认调用此图"
+                presetSelectBtn.text = "更换"
+                presetClearBtn.visibility = View.VISIBLE
+            } else {
+                presetDesc.text = "未设置预设，提示词页默认为空"
+                presetSelectBtn.text = "导入"
+                presetClearBtn.visibility = View.GONE
+            }
+        }
+        presetClearBtn.setOnClickListener {
+            aiSettingsStore.clearDefaultReferenceImage()
+            refreshPresetRefUi()
+            toast("已清除形象参考预设")
+        }
+        onPresetReferenceUpdated = { refreshPresetRefUi() }
+        refreshPresetRefUi()
+        content.addView(presetRefCard)
+
+        section("生成水印")
+        time.setOnCheckedChangeListener { _, _ -> saveNow() }
+        location.setOnCheckedChangeListener { _, _ -> saveNow() }
+        content.addView(time)
+        content.addView(location)
+
+        section("服务与应用")
+        content.addView(MaterialButton(this).apply {
+            text = "API 配置  ›"
+            MikuUi.button(this)
+            setOnClickListener { showAiApiProfilesDialog() }
+        }, LinearLayout.LayoutParams(-1, dp(46)).apply { bottomMargin = dp(8) })
+
+        section("关于 miku camera")
+        val aboutCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = MikuUi.bordered(this@MainActivity, MikuUi.surface, MikuUi.border, 16)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        titleRow.addView(TextView(this).apply {
+            text = "miku camera"
+            textSize = 18f
+            setTextColor(MikuUi.ink)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        titleRow.addView(TextView(this).apply {
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName
+            text = "v$versionName · 作者：zakee"
+            textSize = 12f
+            setTextColor(MikuUi.muted)
+        })
+        aboutCard.addView(titleRow)
+        aboutCard.addView(TextView(this).apply {
+            text = "miku camera 是一款以 Miku 为主角的 Android 相机。普通模式可将 Miku 水印、时间与地点自然叠加在照片中；AI mode 会结合人物或风景重新创作，让 Miku 与现实画面互动融合，并生成有趣可爱的专属时间地点水印。"
+            textSize = 13f
+            setTextColor(MikuUi.ink)
+            setLineSpacing(0f, 1.18f)
+            setPadding(0, dp(10), 0, dp(14))
+        })
+        val aboutButtonRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        aboutButtonRow.addView(
+            aboutLinkButton("个人主页", "https://zakee.fun", primary = false),
+            LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(8) }
+        )
+        aboutButtonRow.addView(
+            aboutLinkButton("Buy me a coffee", "https://ifdian.net/a/zakee/plan", primary = true),
+            LinearLayout.LayoutParams(0, dp(42), 1f)
+        )
+        aboutCard.addView(aboutButtonRow)
+        content.addView(aboutCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+
+        page.addView(content, LinearLayout.LayoutParams(-1, -2))
+        scroll.addView(page, FrameLayout.LayoutParams(-1, -2))
+        dialog.setContentView(scroll)
+        dialog.setOnDismissListener {
+            onPresetReferenceUpdated = null
+            hideKeyboard()
+            saveNow()
+            hideStatusBar()
+        }
+        dialog.window?.apply {
+            WindowCompat.setDecorFitsSystemWindows(this, false)
+            setLayout(-1, -1)
+            statusBarColor = MikuUi.background
+            navigationBarColor = MikuUi.background
+            WindowInsetsControllerCompat(this, decorView).apply {
+                isAppearanceLightStatusBars = true
+                isAppearanceLightNavigationBars = true
+                hide(WindowInsetsCompat.Type.statusBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
         }
         dialog.show()
+        dialog.window?.setLayout(-1, -1)
+    }
+
+    private fun maskApiKey(key: String): String {
+        val trimmed = key.trim()
+        if (trimmed.isEmpty()) return "未设置"
+        if (trimmed.length <= 8) return "••••••••"
+        return trimmed.take(4) + "••••" + trimmed.takeLast(4)
     }
 
     private fun showAiApiProfilesDialog() {
-        val settings = aiSettingsStore.load()
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((20 * density).roundToInt(), 0, (20 * density).roundToInt(), 0)
+        val dialog = android.app.Dialog(this, R.style.Theme_MikuCamera)
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(MikuUi.background)
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
-        container.addView(TextView(this).apply {
-            text = "点击圆圈切换当前使用的 API 配置；点击右侧名称区域进入编辑。API Key 会使用 Android Keystore 加密保存。"
-            textSize = 13f
-            setPadding(0, 0, 0, (12 * density).roundToInt())
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP
+            setBackgroundColor(MikuUi.background)
+            setPadding(dp(16), topSafeMarginPx(), dp(16), bottomSafeMarginPx())
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(12))
+        }
+        val backBtn = ImageView(this).apply {
+            setImageResource(R.drawable.ic_toolbar_back)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+            contentDescription = "返回设置页"
+            isClickable = true
+            isFocusable = true
+            MikuUi.toolbarIcon(this, false)
+            setOnClickListener { dialog.dismiss() }
+        }
+        header.addView(backBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
+        header.addView(TextView(this).apply {
+            text = "API 配置"
+            textSize = 20f
+            setTextColor(MikuUi.ink)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(dp(14), 0, 0, 0)
         })
-        lateinit var dialog: AlertDialog
-        settings.profiles.forEach { profile ->
-            val isActive = profile.id == settings.activeProfileId
-            val row = LinearLayout(this).apply {
+        page.addView(header)
+
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(content, LinearLayout.LayoutParams(-1, -2))
+        scroll.addView(page, FrameLayout.LayoutParams(-1, -2))
+
+        var dropdownExpanded = false
+
+        fun rebuildContent() {
+            content.removeAllViews()
+            val settings = aiSettingsStore.load()
+            val active = settings.activeProfile
+
+            // 第一项：当前使用 [显示当前配置名称，点击后可展开列表]
+            val currentRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding((12 * density).roundToInt(), (10 * density).roundToInt(), (12 * density).roundToInt(), (10 * density).roundToInt())
-                setBackgroundColor(if (isActive) Color.parseColor("#183F776E") else Color.TRANSPARENT)
+                setPadding(0, dp(6), 0, dp(6))
             }
-            val checkbox = TextView(this).apply {
-                text = if (isActive) "✓" else "○"
-                textSize = 18f
-                setPadding(0, 0, (10 * density).roundToInt(), 0)
-                isClickable = true
-                isFocusable = true
+            currentRow.addView(TextView(this).apply {
+                text = "当前使用"
+                textSize = 14f
+                setTextColor(MikuUi.ink)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+
+            val dropdownList = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = MikuUi.bordered(this@MainActivity, MikuUi.surface, MikuUi.border, 14)
+                setPadding(dp(6), dp(6), dp(6), dp(6))
+                visibility = if (dropdownExpanded) View.VISIBLE else View.GONE
+            }
+
+            val selectorButton = MaterialButton(this).apply {
+                text = "${active.name}  ${if (dropdownExpanded) "▴" else "▾"}"
+                MikuUi.button(this, false)
+                setPadding(dp(14), 0, dp(14), 0)
                 setOnClickListener {
-                    if (isActive) return@setOnClickListener
-                    aiSettingsStore.saveProfiles(settings.profiles, profile.id)
-                    updateAiMetadataLabel()
-                    dialog.dismiss()
-                    showAiApiProfilesDialog()
+                    dropdownExpanded = !dropdownExpanded
+                    dropdownList.visibility = if (dropdownExpanded) View.VISIBLE else View.GONE
+                    text = "${active.name}  ${if (dropdownExpanded) "▴" else "▾"}"
                 }
             }
-            val textBlock = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { showAiApiProfileEditor(profile) }
+            currentRow.addView(selectorButton, LinearLayout.LayoutParams(-2, dp(42)))
+            content.addView(currentRow)
+
+            settings.profiles.forEach { profile ->
+                val isSelected = profile.id == settings.activeProfileId
+                dropdownList.addView(MaterialButton(this).apply {
+                    text = "${if (isSelected) "✓ " else "    "}${profile.name}（${profile.model}）"
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    MikuUi.button(this, isSelected)
+                    setPadding(dp(12), 0, dp(12), 0)
+                    setOnClickListener {
+                        dropdownExpanded = false
+                        if (!isSelected) {
+                            aiSettingsStore.saveProfiles(settings.profiles, profile.id)
+                            updateAiMetadataLabel()
+                        }
+                        rebuildContent()
+                    }
+                }, LinearLayout.LayoutParams(-1, dp(40)).apply { bottomMargin = dp(4) })
             }
-            val nameView = TextView(this).apply {
-                text = profile.name
-                textSize = 16f
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-            }
-            val subView = TextView(this).apply {
-                text = profile.preset.displayName + " · " + profile.model
+            content.addView(dropdownList, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+
+            // 下面排列添加的 API Key 配置
+            content.addView(TextView(this).apply {
+                text = "已添加的 API Key"
                 textSize = 13f
-                setTextColor(Color.parseColor("#888888"))
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
+                setTextColor(MikuUi.muted)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setPadding(0, dp(12), 0, dp(8))
+            })
+
+            settings.profiles.forEach { profile ->
+                val isActive = profile.id == settings.activeProfileId
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = MikuUi.bordered(
+                        this@MainActivity,
+                        if (isActive) MikuUi.soft else MikuUi.surface,
+                        if (isActive) MikuUi.accent else MikuUi.border,
+                        14
+                    )
+                    setPadding(dp(14), dp(12), dp(14), dp(12))
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        showAiApiProfileEditor(profile) { rebuildContent() }
+                    }
+                }
+                val infoCol = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                }
+                infoCol.addView(TextView(this).apply {
+                    text = profile.name + if (isActive) "  ·  当前使用" else ""
+                    textSize = 15f
+                    setTextColor(if (isActive) MikuUi.accentInk else MikuUi.ink)
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                })
+                infoCol.addView(TextView(this).apply {
+                    text = "${profile.preset.displayName} · ${profile.model}"
+                    textSize = 12f
+                    setTextColor(MikuUi.muted)
+                    setPadding(0, dp(2), 0, 0)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                })
+                infoCol.addView(TextView(this).apply {
+                    val hasKey = profile.apiKey.isNotBlank()
+                    text = if (hasKey) "API Key：${maskApiKey(profile.apiKey)}" else "API Key：未填写（点击设置）"
+                    textSize = 12f
+                    setTextColor(if (hasKey) MikuUi.ink else Color.parseColor("#D94A56"))
+                    setPadding(0, dp(4), 0, 0)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                })
+                card.addView(infoCol, LinearLayout.LayoutParams(0, -2, 1f))
+                card.addView(TextView(this).apply {
+                    text = "编辑 ›"
+                    textSize = 13f
+                    setTextColor(MikuUi.accentInk)
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    setPadding(dp(8), 0, 0, 0)
+                })
+                content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
             }
-            textBlock.addView(nameView)
-            textBlock.addView(subView)
-            row.addView(checkbox)
-            row.addView(textBlock, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            container.addView(row)
+
+            content.addView(MaterialButton(this).apply {
+                text = "+ 新增 API 配置"
+                MikuUi.button(this, true)
+                setOnClickListener {
+                    showAiApiProfileEditor(null) { rebuildContent() }
+                }
+            }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(6) })
         }
-        val scroll = ScrollView(this).apply { addView(container) }
-        dialog = AlertDialog.Builder(this)
-            .setTitle("API 配置")
-            .setView(scroll)
-            .setNegativeButton("返回图像参数") { _, _ -> showAiImageSettingsDialog() }
-            .setNeutralButton("新增配置") { _, _ -> showAiApiProfileEditor(null) }
-            .show()
+
+        rebuildContent()
+        dialog.setContentView(scroll)
+        dialog.setOnDismissListener { hideStatusBar() }
+        dialog.window?.apply {
+            WindowCompat.setDecorFitsSystemWindows(this, false)
+            setLayout(-1, -1)
+            statusBarColor = MikuUi.background
+            navigationBarColor = MikuUi.background
+            WindowInsetsControllerCompat(this, decorView).apply {
+                isAppearanceLightStatusBars = true
+                isAppearanceLightNavigationBars = true
+                hide(WindowInsetsCompat.Type.statusBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        dialog.show()
+        dialog.window?.setLayout(-1, -1)
     }
 
-    private fun showAiApiProfileEditor(existing: AiApiProfile?) {
-        val selected = existing ?: AiApiProfile(name = "OpenAI", preset = AiServicePreset.OPENAI,
-            baseUrl = AiServicePreset.OPENAI.defaultBaseUrl, endpoint = AiServicePreset.OPENAI.defaultEndpoint, apiKey = "", model = AiServicePreset.OPENAI.defaultModel)
+    private fun showAiApiProfileEditor(existing: AiApiProfile?, onChanged: (() -> Unit)? = null) {
+        val selected = existing ?: AiApiProfile(
+            name = "OpenAI",
+            preset = AiServicePreset.OPENAI,
+            baseUrl = AiServicePreset.OPENAI.defaultBaseUrl,
+            endpoint = AiServicePreset.OPENAI.defaultEndpoint,
+            apiKey = "",
+            model = AiServicePreset.OPENAI.defaultModel
+        )
+        val dialog = android.app.Dialog(this, R.style.Theme_MikuCamera)
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(MikuUi.background)
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP
+            setBackgroundColor(MikuUi.background)
+            setPadding(dp(16), topSafeMarginPx(), dp(16), bottomSafeMarginPx())
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(10))
+        }
+        val backBtn = ImageView(this).apply {
+            setImageResource(R.drawable.ic_toolbar_back)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+            contentDescription = "返回"
+            isClickable = true
+            isFocusable = true
+            MikuUi.toolbarIcon(this, false)
+            setOnClickListener { dialog.dismiss() }
+        }
+        header.addView(backBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
+        header.addView(TextView(this).apply {
+            text = if (existing == null) "新增 API 配置" else "编辑 API 配置"
+            textSize = 20f
+            setTextColor(MikuUi.ink)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(dp(14), 0, 0, 0)
+        })
+        page.addView(header)
+
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((20 * density).roundToInt(), 0, (20 * density).roundToInt(), 0)
+        }
+        fun label(text: String) {
+            container.addView(TextView(this).apply {
+                this.text = text
+                textSize = 13f
+                setTextColor(MikuUi.muted)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setPadding(0, dp(10), 0, dp(4))
+            })
         }
         fun input(value: String, hint: String, type: Int = InputType.TYPE_CLASS_TEXT): EditText = EditText(this).apply {
-            setText(value); this.hint = hint; inputType = type; setSingleLine(true); setSelection(text.length)
+            setText(value)
+            this.hint = hint
+            inputType = type
+            setSingleLine(true)
+            setSelection(text.length)
+            MikuUi.editText(this, 12)
         }
         val nameInput = input(selected.name, "例如：OpenAI 主账号")
-        val presetSpinner = Spinner(this)
+        val presetSpinner = Spinner(this).apply {
+            background = MikuUi.bordered(this@MainActivity, MikuUi.surface, MikuUi.border, 12)
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+        }
         val presets = AiServicePreset.entries.toList()
         presetSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, presets.map { it.displayName })
         presetSpinner.setSelection(presets.indexOf(selected.preset).coerceAtLeast(0))
         val baseUrlInput = input(selected.baseUrl, "https://...", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         val endpointInput = input(selected.endpoint, "/images/edits")
-        val keyInput = input(selected.apiKey, "API Key", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        val keyInput = input(selected.apiKey, "sk-...", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
         val modelInput = input(selected.model, "模型名称")
-        val modelHint = TextView(this).apply { textSize = 12f; setTextColor(Color.parseColor("#888888")); setPadding(0, (4 * density).roundToInt(), 0, 0) }
-        val hint = TextView(this).apply { textSize = 12f; setPadding(0, (12 * density).roundToInt(), 0, 0) }
+        val modelHint = TextView(this).apply {
+            textSize = 12f
+            setTextColor(MikuUi.muted)
+            setPadding(0, dp(4), 0, 0)
+        }
+        val hint = TextView(this).apply {
+            textSize = 12f
+            setTextColor(MikuUi.muted)
+            setPadding(0, dp(8), 0, 0)
+        }
         fun updatePresetHint(fillDefaults: Boolean) {
             val preset = presets[presetSpinner.selectedItemPosition]
             if (fillDefaults) {
+                if (nameInput.text.toString().isBlank() || presets.any { it.displayName.startsWith(nameInput.text.toString()) }) {
+                    nameInput.setText(preset.displayName.substringBefore(" /"))
+                }
                 baseUrlInput.setText(preset.defaultBaseUrl)
                 endpointInput.setText(preset.defaultEndpoint)
                 modelInput.setText(preset.defaultModel)
@@ -1346,41 +2050,86 @@ class MainActivity : AppCompatActivity() {
             }
         }
         updatePresetHint(false)
-        container.addView(TextView(this).apply { text = "配置名称" }); container.addView(nameInput)
-        container.addView(TextView(this).apply { text = "服务类型 / 预设"; setPadding(0, 16, 0, 0) }); container.addView(presetSpinner)
-        container.addView(TextView(this).apply { text = "Base URL"; setPadding(0, 16, 0, 0) }); container.addView(baseUrlInput)
-        container.addView(TextView(this).apply { text = "接口"; setPadding(0, 16, 0, 0) }); container.addView(endpointInput)
-        container.addView(TextView(this).apply { text = "API Key"; setPadding(0, 16, 0, 0) }); container.addView(keyInput)
-        container.addView(TextView(this).apply { text = "模型"; setPadding(0, 16, 0, 0) }); container.addView(modelInput); container.addView(modelHint); container.addView(hint)
-        val dialog = AlertDialog.Builder(this).setTitle(if (existing == null) "新增 API 配置" else "编辑 API 配置")
-            .setView(ScrollView(this).apply { addView(container) }).setNegativeButton("取消", null)
-            .setNeutralButton(if (existing == null) "" else "删除", null).setPositiveButton("保存", null).create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+        label("配置名称"); container.addView(nameInput)
+        label("服务类型 / 预设"); container.addView(presetSpinner, LinearLayout.LayoutParams(-1, dp(44)))
+        label("API Key"); container.addView(keyInput)
+        label("模型"); container.addView(modelInput); container.addView(modelHint)
+        label("Base URL"); container.addView(baseUrlInput)
+        label("接口路径"); container.addView(endpointInput); container.addView(hint)
+
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(16), 0, 0)
+        }
+        if (existing != null) {
+            actionRow.addView(MaterialButton(this).apply {
+                text = "删除"
+                MikuUi.dangerButton(this)
+                setOnClickListener {
+                    val current = aiSettingsStore.load()
+                    if (current.profiles.size == 1) {
+                        toast("至少保留一组 API 配置")
+                        return@setOnClickListener
+                    }
+                    val profiles = current.profiles.filterNot { it.id == existing.id }
+                    val nextActive = if (current.activeProfileId == existing.id) profiles.first().id else current.activeProfileId
+                    aiSettingsStore.saveProfiles(profiles, nextActive)
+                    updateAiMetadataLabel()
+                    dialog.dismiss()
+                    onChanged?.invoke()
+                }
+            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(8) })
+        }
+        actionRow.addView(MaterialButton(this).apply {
+            text = "保存配置"
+            MikuUi.button(this, true)
+            setOnClickListener {
                 val preset = presets[presetSpinner.selectedItemPosition]
-                val updated = selected.copy(name = nameInput.text.toString(), preset = preset, baseUrl = baseUrlInput.text.toString(),
-                    endpoint = endpointInput.text.toString(), apiKey = keyInput.text.toString(), model = modelInput.text.toString())
+                val updated = selected.copy(
+                    name = nameInput.text.toString(),
+                    preset = preset,
+                    baseUrl = baseUrlInput.text.toString(),
+                    endpoint = endpointInput.text.toString(),
+                    apiKey = keyInput.text.toString(),
+                    model = modelInput.text.toString()
+                )
                 val current = aiSettingsStore.load()
                 val profiles = if (existing == null) current.profiles + updated else current.profiles.map { if (it.id == updated.id) updated else it }
                 runCatching { aiSettingsStore.saveProfiles(profiles, updated.id) }.onSuccess {
-                    updateAiMetadataLabel(); toast("API 配置已保存"); dialog.dismiss(); showAiApiProfilesDialog()
+                    updateAiMetadataLabel()
+                    toast("API 配置已保存")
+                    dialog.dismiss()
+                    onChanged?.invoke()
                 }.onFailure { toast(it.message ?: "API 配置无效") }
             }
-            if (existing != null) dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-                val current = aiSettingsStore.load()
-                if (current.profiles.size == 1) { toast("至少保留一组 API 配置"); return@setOnClickListener }
-                val profiles = current.profiles.filterNot { it.id == existing.id }
-                aiSettingsStore.saveProfiles(profiles, profiles.first().id)
-                updateAiMetadataLabel(); dialog.dismiss(); showAiApiProfilesDialog()
-            } else dialog.getButton(AlertDialog.BUTTON_NEUTRAL).visibility = View.GONE
+        }, LinearLayout.LayoutParams(0, dp(44), 1.4f))
+        container.addView(actionRow)
+
+        page.addView(container, LinearLayout.LayoutParams(-1, -2))
+        scroll.addView(page, FrameLayout.LayoutParams(-1, -2))
+        dialog.setContentView(scroll)
+        dialog.setOnDismissListener {
+            hideKeyboard()
+            hideStatusBar()
+        }
+        dialog.window?.apply {
+            WindowCompat.setDecorFitsSystemWindows(this, false)
+            setLayout(-1, -1)
+            statusBarColor = MikuUi.background
+            navigationBarColor = MikuUi.background
+            WindowInsetsControllerCompat(this, decorView).apply {
+                isAppearanceLightStatusBars = true
+                isAppearanceLightNavigationBars = true
+                hide(WindowInsetsCompat.Type.statusBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
         }
         dialog.show()
+        dialog.window?.setLayout(-1, -1)
     }
 
     private fun showAboutDialog() {
-        val primaryTextColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSurface)
-        val secondaryTextColor = Color.argb(190, Color.red(primaryTextColor), Color.green(primaryTextColor), Color.blue(primaryTextColor))
-        val mutedTextColor = Color.argb(130, Color.red(primaryTextColor), Color.green(primaryTextColor), Color.blue(primaryTextColor))
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(
@@ -1393,31 +2142,42 @@ class MainActivity : AppCompatActivity() {
         container.addView(TextView(this).apply {
             text = "miku camera"
             textSize = 22f
-            setTextColor(primaryTextColor)
+            setTextColor(MikuUi.ink)
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         container.addView(TextView(this).apply {
             text = "作者：zakee"
             textSize = 15f
-            setTextColor(secondaryTextColor)
+            setTextColor(MikuUi.muted)
             setPadding(0, (8 * density).roundToInt(), 0, 0)
         })
         container.addView(TextView(this).apply {
             text = "miku camera 是一款以 Miku 为主角的 Android 相机。普通模式可将 Miku 水印、时间与地点自然叠加在照片中；AI mode 会结合人物或风景重新创作，让 Miku 与现实画面互动融合，并生成有趣可爱的专属时间地点水印。"
             textSize = 14f
-            setTextColor(secondaryTextColor)
+            setTextColor(MikuUi.ink)
             setLineSpacing(0f, 1.15f)
-            setPadding(0, (14 * density).roundToInt(), 0, (22 * density).roundToInt())
+            setPadding(0, (14 * density).roundToInt(), 0, (18 * density).roundToInt())
         })
-        container.addView(aboutLinkButton("个人主页", "https://zakee.fun"))
-        container.addView(aboutLinkButton("Buy me a coffee", "https://ifdian.net/a/zakee/plan"))
+        val buttonRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        buttonRow.addView(
+            aboutLinkButton("个人主页", "https://zakee.fun", primary = false),
+            LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(8) }
+        )
+        buttonRow.addView(
+            aboutLinkButton("Buy me a coffee", "https://ifdian.net/a/zakee/plan", primary = true),
+            LinearLayout.LayoutParams(0, dp(44), 1f)
+        )
+        container.addView(buttonRow)
         container.addView(TextView(this).apply {
             val versionName = packageManager.getPackageInfo(packageName, 0).versionName
             text = "版本 $versionName"
             textSize = 12f
             gravity = Gravity.CENTER_HORIZONTAL
-            setTextColor(mutedTextColor)
-            setPadding(0, (10 * density).roundToInt(), 0, 0)
+            setTextColor(MikuUi.muted)
+            setPadding(0, (12 * density).roundToInt(), 0, 0)
         })
 
         AlertDialog.Builder(this)
@@ -1427,11 +2187,12 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun aboutLinkButton(label: String, url: String): View {
+    private fun aboutLinkButton(label: String, url: String, primary: Boolean): View {
         return MaterialButton(this).apply {
             text = label
             isAllCaps = false
             gravity = Gravity.CENTER
+            MikuUi.button(this, primary)
             setOnClickListener { openExternalUrl(url) }
         }
     }
@@ -1443,43 +2204,81 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openExternalUrl(url: String) {
+        launchingInternalIntent = true
         runCatching {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }.onFailure { toast("没有可打开网页的应用") }
+        }.onFailure {
+            launchingInternalIntent = false
+            toast("没有可打开网页的应用")
+        }
     }
+
+    private fun currentGenerationConfiguration(): AiGenerationConfiguration =
+        aiSession?.transactionId?.let { aiTransactionStore.get(it)?.configuration }
+            ?: AiGenerationConfiguration.from(aiSettingsStore.load())
 
     private fun updateAiMetadataLabel() {
-        if (!::aiVisualStyleText.isInitialized || !::aiOutfitStyleText.isInitialized) return
+        if (!::aiVisualStyleText.isInitialized) return
+        val session = aiSession ?: return
+        val config = currentGenerationConfiguration()
+        aiTimeEditText.text = session.captureTime
+        aiLocationEditText.text = session.captureLocation.ifBlank { "未获取到地点" }
+        aiVisualStyleText.text = "形象"
+        aiOutfitStyleText.text = "服装"
+        fun selected(id: Int, checked: Boolean) {
+            findViewById<MaterialButton>(id).apply {
+                MikuUi.button(this, checked); isSelected = checked
+                contentDescription = "$text${if (checked) "，已选择" else ""}"
+            }
+        }
+        selected(R.id.aiVisualStyleToggleButton, config.visualStyle == AiVisualStyle.ANIME)
+        selected(R.id.aiRealisticButton, config.visualStyle == AiVisualStyle.REALISTIC)
+        selected(R.id.aiOutfitStyleToggleButton, config.outfitStyle == AiOutfitStyle.OFFICIAL)
+        selected(R.id.aiAdaptiveButton, config.outfitStyle == AiOutfitStyle.SCENE_ADAPTIVE)
+        listOf(R.id.aiResolution1, R.id.aiResolution2, R.id.aiResolution4).zip(AiResolution.entries).forEach { (id, resolution) ->
+            selected(id, config.resolution == resolution)
+        }
+        findViewById<TextView>(R.id.aiResolutionHint).visibility = View.GONE
+    }
+
+    private fun selectGenerationOptions(
+        visual: AiVisualStyle = currentGenerationConfiguration().visualStyle,
+        outfit: AiOutfitStyle = currentGenerationConfiguration().outfitStyle,
+        resolution: AiResolution = currentGenerationConfiguration().resolution
+    ) {
         val session = aiSession ?: return
         val settings = aiSettingsStore.load()
-        aiTimeEditText.text = "时间：${session.captureTime}  ✎"
-        aiLocationEditText.text = "地点：${session.captureLocation.ifBlank { "未获取到地点" }}  ✎"
-        aiVisualStyleText.text = "形象：${settings.visualStyle.displayName}"
-        aiOutfitStyleText.text = "服装：${settings.outfitStyle.displayName}"
-        aiVisualStyleToggleButton.text = if (settings.visualStyle == AiVisualStyle.REALISTIC) "二次元" else "三次元"
-        aiOutfitStyleToggleButton.text = if (settings.outfitStyle == AiOutfitStyle.OFFICIAL) "场景搭配" else "公式服"
-    }
-
-    private fun toggleAiVisualStyle() {
-        val current = aiSettingsStore.load()
-        val next = if (current.visualStyle == AiVisualStyle.REALISTIC) AiVisualStyle.ANIME else AiVisualStyle.REALISTIC
-        aiSettingsStore.saveImageSettings(next, current.outfitStyle, current.defaultPrompt, current.includeTimeWatermark, current.includeLocationWatermark)
+        val config = currentGenerationConfiguration().copy(visualStyle = visual, outfitStyle = outfit, resolution = resolution)
+        aiSettingsStore.saveImageSettings(visual, outfit, settings.defaultPrompt, settings.includeTimeWatermark, settings.includeLocationWatermark)
+        aiSettingsStore.saveResolution(resolution)
+        val existing = session.transactionId?.let { aiTransactionStore.get(it) }
+        if (existing != null && existing.attemptCount > 0) {
+            // Editing a submitted task creates a separate draft; retries retain their snapshot.
+            val task = createAiTransactionSnapshot(session.originalFile, session.captureTime, session.captureLocation,
+                aiPromptEditText.text.toString(), aiTimeWatermarkSwitch.isChecked, aiLocationWatermarkSwitch.isChecked, config,
+                referenceSource = session.referenceFile)
+            aiSession = AiSession(task.originalFile, task.captureTime, task.captureLocation, transactionId = task.id, referenceFile = session.referenceFile)
+        } else {
+            val id = ensureAiTransaction(session)
+            aiTransactionStore.update(id) { it.copy(configuration = config) }
+        }
         updateAiMetadataLabel()
-    }
-
-    private fun toggleAiOutfitStyle() {
-        val current = aiSettingsStore.load()
-        val next = if (current.outfitStyle == AiOutfitStyle.OFFICIAL) AiOutfitStyle.SCENE_ADAPTIVE else AiOutfitStyle.OFFICIAL
-        aiSettingsStore.saveImageSettings(current.visualStyle, next, current.defaultPrompt, current.includeTimeWatermark, current.includeLocationWatermark)
-        updateAiMetadataLabel()
+        persistAiSession("PROMPT", aiPromptEditText.text.toString())
     }
 
     private fun editAiMetadata(time: Boolean) {
         val session = aiSession ?: return
-        val input = EditText(this).apply { setText(if (time) session.captureTime else session.captureLocation) }
+        val input = EditText(this).apply {
+            setText(if (time) session.captureTime else session.captureLocation)
+            MikuUi.editText(this, 12)
+        }
+        val box = FrameLayout(this).apply {
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+            addView(input)
+        }
         AlertDialog.Builder(this)
             .setTitle(if (time) "编辑拍摄时间" else "编辑拍摄地点")
-            .setView(input)
+            .setView(box)
             .setNegativeButton("取消", null)
             .setPositiveButton("确定") { _, _ ->
                 if (time) session.captureTime = input.text.toString().trim() else session.captureLocation = input.text.toString().trim()
@@ -1556,6 +2355,7 @@ class MainActivity : AppCompatActivity() {
     private fun deleteAiSessionFiles(session: AiSession) {
         session.originalFile.delete()
         session.resultFile?.delete()
+        session.referenceFile?.delete()
     }
 
     /** 将会话状态持久化到本地（原图/结果图已存于 filesDir/ai_session，此处写元数据）。 */
@@ -1570,7 +2370,8 @@ class MainActivity : AppCompatActivity() {
                 stage = stage,
                 resultPath = resultPath,
                 resultSaved = session.resultSaved,
-                transactionId = session.transactionId
+                transactionId = session.transactionId,
+                referencePath = session.referenceFile?.absolutePath
             )
         )
     }
@@ -1586,7 +2387,8 @@ class MainActivity : AppCompatActivity() {
             captureLocation = snapshot.captureLocation,
             resultFile = snapshot.resultFile,
             resultSaved = snapshot.resultSaved,
-            transactionId = snapshot.transactionId
+            transactionId = snapshot.transactionId,
+            referenceFile = snapshot.referenceFile
         )
         cameraMode = CameraMode.AI
         when (snapshot.stage) {
@@ -1625,34 +2427,39 @@ class MainActivity : AppCompatActivity() {
     private fun startLocationWarmup() {
         if (hasLocationPermission()) {
             requestLocation(silent = true)
-        } else {
-            locationPermission.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            )
         }
     }
 
     private fun continuePermissionSequence() {
-        when {
-            !hasLocationPermission() && !locationPermissionRequested -> {
+        val missingRuntimePermissions = buildList {
+            if (!hasLocationPermission() && !locationPermissionRequested) {
                 locationPermissionRequested = true
-                locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+                add(Manifest.permission.ACCESS_COARSE_LOCATION)
             }
-            !hasCameraPermission() && !cameraPermissionRequested -> {
+            if (!hasCameraPermission() && !cameraPermissionRequested) {
                 cameraPermissionRequested = true
-                cameraPermission.launch(requiredCameraPermissions())
+                addAll(requiredCameraPermissions())
             }
-            !hasPhotoPermission() && !photoPermissionRequested -> {
+            if (!hasPhotoPermission() && !photoPermissionRequested) {
                 photoPermissionRequested = true
-                photoPermission.launch(photoPermissionName())
+                add(photoPermissionName())
+            }
+        }
+        when {
+            missingRuntimePermissions.isNotEmpty() -> {
+                startupPermissions.launch(missingRuntimePermissions.distinct().toTypedArray())
             }
             !Settings.canDrawOverlays(this) && !overlayPromptShown -> {
+                if (hasCameraPermission()) startCamera()
+                if (hasLocationPermission()) startLocationWarmup()
                 overlayPromptShown = true
                 AlertDialog.Builder(this)
                     .setTitle("开启悬浮窗功能")
                     .setMessage("AI 事务可在后台继续处理。开启悬浮窗后可随时查看进行中、成功和失败的任务。")
                     .setNegativeButton("暂不") { _, _ -> startCamera(); startLocationWarmup() }
                     .setPositiveButton("去开启") { _, _ ->
+                        launchingInternalIntent = true
                         startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                     }
                     .show()
@@ -1678,12 +2485,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun importAiPhoto(uri: Uri) {
         if (cameraMode != CameraMode.AI) return
+        if (aiCaptureTarget == AiCaptureTarget.REFERENCE && aiSession != null) {
+            importReferencePhoto(uri)
+            return
+        }
+        if (returningToPromptOnCancelCapture && aiSession != null) {
+            replaceCurrentOriginalPhoto(uri)
+            return
+        }
         captureButton.isEnabled = false
         cameraExecutor.execute {
             try {
                 val imported = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                 contentResolver.openInputStream(uri)?.use { input -> imported.outputStream().use { input.copyTo(it) } }
                     ?: throw IllegalArgumentException("无法读取照片")
+                val refCopy = prepareDefaultReferenceCopy()
                 val time = formatAiCaptureTime()
                 val location = formatLocationLabel(includePoi = true).orEmpty()
                 val settings = aiSettingsStore.load()
@@ -1694,9 +2510,10 @@ class MainActivity : AppCompatActivity() {
                     prompt = settings.defaultPrompt,
                     includeTime = settings.includeTimeWatermark,
                     includeLocation = settings.includeLocationWatermark,
-                    configuration = AiGenerationConfiguration.from(settings)
+                    configuration = AiGenerationConfiguration.from(settings),
+                    referenceSource = refCopy
                 )
-                val importedSession = AiSession(imported, time, location, transactionId = task.id)
+                val importedSession = AiSession(imported, time, location, transactionId = task.id, referenceFile = refCopy)
                 runOnUiThread {
                     if (cameraMode != CameraMode.AI) {
                         removeTransactionWithoutBlocking(importedSession)
@@ -1716,13 +2533,93 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun replaceCurrentOriginalPhoto(uri: Uri) {
+        val session = aiSession ?: return importAiPhoto(uri)
+        cameraExecutor.execute {
+            try {
+                val imported = aiSessionStore.newFile("miku_ai_original_", ".jpg")
+                contentResolver.openInputStream(uri)?.use { input -> imported.outputStream().use { input.copyTo(it) } }
+                    ?: throw IllegalArgumentException("无法读取照片")
+                val oldOriginal = session.originalFile
+                val id = ensureAiTransaction(session)
+                val taskOriginal = aiTransactionStore.newFile("miku_ai_task_original_", ".jpg")
+                imported.copyTo(taskOriginal, overwrite = true)
+                val oldTaskOriginal = aiTransactionStore.get(id)?.originalFile
+                aiTransactionStore.update(id) { it.copy(originalPath = taskOriginal.absolutePath) }
+                if (oldTaskOriginal?.absolutePath != taskOriginal.absolutePath) oldTaskOriginal?.delete()
+                runOnUiThread {
+                    session.originalFile = imported
+                    if (oldOriginal.absolutePath != imported.absolutePath) oldOriginal.delete()
+                    returningToPromptOnCancelCapture = false
+                    aiCaptureTarget = AiCaptureTarget.ORIGINAL
+                    showAiPromptStage(resetPrompt = false)
+                    AiOverlayService.refresh(this@MainActivity)
+                }
+            } catch (error: Throwable) {
+                runOnUiThread { toast("导入原图失败: ${error.message ?: "未知错误"}") }
+            }
+        }
+    }
+
+    private fun importReferencePhoto(uri: Uri) {
+        val session = aiSession ?: return
+        cameraExecutor.execute {
+            try {
+                val refFile = aiSessionStore.newFile("miku_ai_ref_", ".jpg")
+                contentResolver.openInputStream(uri)?.use { input -> refFile.outputStream().use { input.copyTo(it) } }
+                    ?: throw IllegalArgumentException("无法读取形象参考图")
+                val id = ensureAiTransaction(session)
+                val taskRef = aiTransactionStore.newFile("miku_ai_task_ref_", ".jpg")
+                refFile.copyTo(taskRef, overwrite = true)
+                val oldTaskRef = aiTransactionStore.get(id)?.referenceFile
+                aiTransactionStore.update(id) { it.copy(referencePath = taskRef.absolutePath) }
+                if (oldTaskRef?.absolutePath != taskRef.absolutePath) oldTaskRef?.delete()
+                val oldSessionRef = session.referenceFile
+                runOnUiThread {
+                    session.referenceFile = refFile
+                    if (oldSessionRef?.absolutePath != refFile.absolutePath) oldSessionRef?.delete()
+                    returningToPromptOnCancelCapture = false
+                    aiCaptureTarget = AiCaptureTarget.ORIGINAL
+                    showAiPromptStage(resetPrompt = false)
+                    AiOverlayService.refresh(this@MainActivity)
+                }
+            } catch (error: Throwable) {
+                runOnUiThread { toast("导入形象参考失败: ${error.message ?: "未知错误"}") }
+            }
+        }
+    }
+
+    private fun importPresetReferencePhoto(uri: Uri) {
+        cameraExecutor.execute {
+            try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    aiSettingsStore.saveDefaultReferenceImage(input)
+                } ?: throw IllegalArgumentException("无法读取图片")
+                runOnUiThread {
+                    onPresetReferenceUpdated?.invoke()
+                    toast("已更新默认形象参考预设")
+                }
+            } catch (error: Throwable) {
+                runOnUiThread { toast("设置预设失败: ${error.message ?: "未知错误"}") }
+            }
+        }
+    }
+
     private fun openAiTransaction(id: String) {
         // Preserve prompt-page edits before switching to another durable transaction.
         if (aiStage == AiStage.PROMPT && aiSession?.transactionId != null) {
             updateTransactionFromCurrentSession()
         }
         val task = aiTransactionStore.get(id) ?: return toast("该事务已被清除")
-        aiSession = AiSession(task.originalFile, task.captureTime, task.captureLocation, task.resultFile, task.resultSaved, task.id)
+        aiSession = AiSession(
+            originalFile = task.originalFile,
+            captureTime = task.captureTime,
+            captureLocation = task.captureLocation,
+            resultFile = task.resultFile,
+            resultSaved = task.resultSaved,
+            transactionId = task.id,
+            referenceFile = task.referenceFile
+        )
         cameraMode = CameraMode.AI
         aiPromptEditText.setText(task.prompt)
         aiTimeWatermarkSwitch.isChecked = task.includeTimeWatermark
@@ -1928,38 +2825,15 @@ class MainActivity : AppCompatActivity() {
     private fun updateFlashControl() {
         val hasFlash = camera?.cameraInfo?.hasFlashUnit() == true
         flashButton.isEnabled = hasFlash
-        flashButton.alpha = if (hasFlash) 1f else 0.4f
-        flashIcon.text = "⚡"
-        // Badge is layout-tied to the ⚡ glyph (not the 44dp circle). Nudge so it touches.
-        fun placeBadge(touchDxDp: Float, touchDyDp: Float, sizeSp: Float) {
-            flashBadge.translationX = touchDxDp * density
-            flashBadge.translationY = touchDyDp * density
-            flashBadge.textSize = sizeSp
-            val lp = (flashBadge.layoutParams as FrameLayout.LayoutParams).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-                marginEnd = 0
-                bottomMargin = 0
-            }
-            flashBadge.layoutParams = lp
+        flashButton.alpha = if (hasFlash) 1f else 0.45f
+        flashBadge.visibility = View.GONE
+        val iconRes = when {
+            !hasFlash || flashMode == ImageCapture.FLASH_MODE_OFF -> R.drawable.ic_toolbar_flash_off
+            flashMode == ImageCapture.FLASH_MODE_ON -> R.drawable.ic_toolbar_flash_on
+            else -> R.drawable.ic_toolbar_flash_auto
         }
-        when {
-            !hasFlash || flashMode == ImageCapture.FLASH_MODE_OFF -> {
-                flashBadge.visibility = View.VISIBLE
-                flashBadge.text = "❌"
-                flashBadge.setTextColor(Color.parseColor("#FF5252"))
-                // Sit on the lower-right tip of the bolt.
-                placeBadge(touchDxDp = 1f, touchDyDp = 0f, sizeSp = 10f)
-            }
-            flashMode == ImageCapture.FLASH_MODE_ON -> {
-                flashBadge.visibility = View.GONE
-            }
-            else -> {
-                flashBadge.visibility = View.VISIBLE
-                flashBadge.text = "A"
-                flashBadge.setTextColor(Color.WHITE)
-                placeBadge(touchDxDp = 2f, touchDyDp = 1f, sizeSp = 10f)
-            }
-        }
+        flashIcon.setImageResource(iconRes)
+        MikuUi.toolbarIcon(flashButton, hasFlash && flashMode != ImageCapture.FLASH_MODE_OFF)
         if (!hasFlash) {
             camera?.cameraControl?.enableTorch(false)
             imageCapture?.flashMode = ImageCapture.FLASH_MODE_OFF
@@ -2059,8 +2933,36 @@ class MainActivity : AppCompatActivity() {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                 try {
                     if (captureModeAtShutter == CameraMode.AI) {
+                        if (aiCaptureTarget == AiCaptureTarget.REFERENCE && aiSession != null) {
+                            val refFile = aiSessionStore.newFile("miku_ai_ref_", ".jpg")
+                            PhotoComposer.prepareCleanPhoto(file, spec, refFile)
+                            val session = aiSession!!
+                            val id = ensureAiTransaction(session)
+                            val taskRef = aiTransactionStore.newFile("miku_ai_task_ref_", ".jpg")
+                            refFile.copyTo(taskRef, overwrite = true)
+                            val oldTaskRef = aiTransactionStore.get(id)?.referenceFile
+                            aiTransactionStore.update(id) { it.copy(referencePath = taskRef.absolutePath) }
+                            if (oldTaskRef?.absolutePath != taskRef.absolutePath) oldTaskRef?.delete()
+                            val oldSessionRef = session.referenceFile
+                            runOnUiThread {
+                                session.referenceFile = refFile
+                                if (oldSessionRef?.absolutePath != refFile.absolutePath) oldSessionRef?.delete()
+                                returningToPromptOnCancelCapture = false
+                                aiCaptureTarget = AiCaptureTarget.ORIGINAL
+                                captureButton.isEnabled = true
+                                showAiPromptStage(resetPrompt = false)
+                                scheduleAiOverlayRefresh()
+                            }
+                            return
+                        }
                         val clean = aiSessionStore.newFile("miku_ai_original_", ".jpg")
                         PhotoComposer.prepareCleanPhoto(file, spec, clean)
+                        val existingRef = if (returningToPromptOnCancelCapture) {
+                            aiSession?.referenceFile?.takeIf { it.isFile && it.length() > 0L }?.let { ref ->
+                                aiSessionStore.newFile("miku_ai_ref_", ".jpg").also { ref.copyTo(it, overwrite = true) }
+                            }
+                        } else null
+                        val refCopy = existingRef ?: prepareDefaultReferenceCopy()
                         val settings = aiSettingsStore.load()
                         val task = createAiTransactionSnapshot(
                             source = clean,
@@ -2070,7 +2972,8 @@ class MainActivity : AppCompatActivity() {
                             includeTime = settings.includeTimeWatermark,
                             includeLocation = settings.includeLocationWatermark,
                             configuration = AiGenerationConfiguration.from(settings),
-                            createdAt = fileNameTimeAtShutter
+                            createdAt = fileNameTimeAtShutter,
+                            referenceSource = refCopy
                         )
                         val originalUri = PhotoComposer.saveFileToGallery(
                             this@MainActivity,
@@ -2083,8 +2986,10 @@ class MainActivity : AppCompatActivity() {
                             originalFile = clean,
                             captureTime = aiCaptureTimeAtShutter,
                             captureLocation = aiLocationAtShutter,
-                            transactionId = task.id
+                            transactionId = task.id,
+                            referenceFile = refCopy
                         )
+                        val resetPromptFlag = !returningToPromptOnCancelCapture
                         runOnUiThread {
                             if (cameraMode != CameraMode.AI) {
                                 removeTransactionWithoutBlocking(session)
@@ -2092,10 +2997,12 @@ class MainActivity : AppCompatActivity() {
                             }
                             aiSession?.let(::removeTransactionWithoutBlocking)
                             aiSession = session
+                            returningToPromptOnCancelCapture = false
+                            aiCaptureTarget = AiCaptureTarget.ORIGINAL
                             captureButton.isEnabled = true
                             updateRecentPhoto(originalUri)
-                            persistAiSession(stage = "PROMPT", prompt = aiSettingsStore.load().defaultPrompt)
-                            showAiPromptStage(resetPrompt = true)
+                            persistAiSession(stage = "PROMPT", prompt = aiPromptEditText.text.toString().ifBlank { settings.defaultPrompt })
+                            showAiPromptStage(resetPrompt = resetPromptFlag)
                             // CameraX is still unwinding its callback. Delay system-window work.
                             scheduleAiOverlayRefresh()
                         }
@@ -2186,6 +3093,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openRecentPhoto() {
         val uri = recentPhotoUri ?: return toast("还没有拍摄过照片")
+        launchingInternalIntent = true
         runCatching {
             startActivity(
                 Intent(Intent.ACTION_VIEW).apply {
@@ -2193,32 +3101,37 @@ class MainActivity : AppCompatActivity() {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             )
-        }.onFailure { toast("无法打开相册") }
+        }.onFailure {
+            launchingInternalIntent = false
+            toast("无法打开相册")
+        }
     }
 
     private fun showWatermarkChooser() {
         val dialog = BottomSheetDialog(this)
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((20 * density).roundToInt(), (12 * density).roundToInt(), (20 * density).roundToInt(), (20 * density).roundToInt())
+            setPadding((20 * density).roundToInt(), (16 * density).roundToInt(), (20 * density).roundToInt(), bottomSafeMarginPx())
         }
         container.addView(TextView(this).apply {
-            text = "水印"
+            text = "选择水印"
             textSize = 20f
-            setTextColor(Color.WHITE)
-            setPadding(0, 0, 0, (12 * density).roundToInt())
+            setTextColor(MikuUi.ink)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, (10 * density).roundToInt())
         })
         val newButton = MaterialButton(this).apply {
             text = "+ 新建水印"
             setOnClickListener { dialog.dismiss(); startEditor(WatermarkPreset.newDraft()) }
         }
-        container.addView(newButton)
+        container.addView(newButton, LinearLayout.LayoutParams(-1, dp(44)).apply { bottomMargin = dp(6) })
         store.loadAll().forEach { preset ->
             container.addView(buildWatermarkRow(preset, dialog))
         }
-        // Bottom sheet content often sits on a light surface; force a dark panel.
-        container.setBackgroundColor(Color.parseColor("#FF1C1C1C"))
-        dialog.setContentView(container)
+        MikuUi.styleTree(container)
+        MikuUi.button(newButton, true)
+        container.background = MikuUi.rounded(this, MikuUi.background, 24)
+        dialog.setContentView(ScrollView(this).apply { addView(container) })
         dialog.show()
     }
 
@@ -2237,7 +3150,7 @@ class MainActivity : AppCompatActivity() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                setColor(Color.parseColor("#33FFFFFF"))
+                setColor(MikuUi.soft)
                 cornerRadius = 8 * density
             }
             contentDescription = "水印预览"
@@ -2252,7 +3165,7 @@ class MainActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = (12 * density).roundToInt()
             }
-            text = preset.name.ifBlank { "未命名水印" }
+            text = (if (preset.id == this@MainActivity.overlay.currentPreset().id) "✓ " else "") + preset.name.ifBlank { "未命名水印" }
             setOnClickListener {
                 dialog.dismiss()
                 selectPreset(preset)

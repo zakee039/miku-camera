@@ -1,43 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Screen (black)
-    └── stage 9:16 · centered · full width
-          ├── topBar · watermark + flash (outside FOV)
-          ├── viewfinder 3:4 · capture FOV only
-          └── bottomChrome · shutter / editor
-  Extra screen height → equal black letterbox above/below stage.
--->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/black">
+    android:background="@color/background">
 
-    <!-- 9:16 content stage (positioned/centered in code) -->
+    <!-- Middle-lower content stage (positioned in code: natural top extension, ~50px bottom clearance) -->
     <FrameLayout
         android:id="@+id/contentStage"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center"
-        android:background="@color/black">
+        android:layout_gravity="top|center_horizontal"
+        android:background="@color/background">
 
-        <!-- Top tool bar: outside the 3:4 FOV (positioned in code) -->
+        <!-- Top tool bar: immediately above the 3:4 viewfinder, with 4 custom vector icons -->
         <LinearLayout
             android:id="@+id/cameraControls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="top"
-            android:background="@color/black"
+            android:background="@color/background"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:paddingTop="6dp"
-            android:paddingBottom="6dp">
+            android:paddingBottom="8dp">
 
             <FrameLayout
-                android:layout_width="88dp"
+                android:layout_width="92dp"
                 android:layout_height="44dp">
 
                 <LinearLayout
@@ -47,28 +39,30 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <TextView
+                    <ImageView
                         android:id="@+id/selectWatermarkButton"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
                         android:background="@drawable/overlay_circle_button"
+                        android:clickable="true"
                         android:contentDescription="水印"
-                        android:gravity="center"
-                        android:text="🌸"
-                        android:textColor="@color/white"
-                        android:textSize="20sp" />
+                        android:focusable="true"
+                        android:padding="9dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_toolbar_watermark" />
 
-                    <TextView
+                    <ImageView
                         android:id="@+id/aiModeButton"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:background="@null"
-                        android:contentDescription="进入 AI mode"
-                        android:gravity="center"
-                        android:text="🤖"
-                        android:textColor="@color/white"
-                        android:textSize="20sp"
-                        android:translationX="-4dp" />
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/overlay_circle_button"
+                        android:clickable="true"
+                        android:contentDescription="AI 模式"
+                        android:focusable="true"
+                        android:padding="9dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_toolbar_ai" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -79,37 +73,39 @@
                     android:orientation="horizontal"
                     android:visibility="gone">
 
-                    <TextView
+                    <ImageView
                         android:id="@+id/aiBackButton"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
                         android:background="@drawable/overlay_circle_button"
+                        android:clickable="true"
                         android:contentDescription="退出 AI mode"
-                        android:gravity="center"
-                        android:text="←"
-                        android:textColor="@color/white"
-                        android:textSize="24sp" />
+                        android:focusable="true"
+                        android:padding="9dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_toolbar_back" />
 
-                    <TextView
+                    <ImageView
                         android:id="@+id/aiSettingsButton"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:background="@null"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/overlay_circle_button"
+                        android:clickable="true"
                         android:contentDescription="AI 设置"
-                        android:gravity="center"
-                        android:text="⚙"
-                        android:textColor="@color/white"
-                        android:textSize="20sp" />
+                        android:focusable="true"
+                        android:padding="9dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_toolbar_settings" />
                 </LinearLayout>
             </FrameLayout>
 
-            <!-- Between 🌸 and flash: GPS status; fixed middle slot, marquee if long -->
             <TextView
                 android:id="@+id/locationStatusView"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
                 android:layout_weight="1"
                 android:ellipsize="marquee"
                 android:focusable="true"
@@ -120,31 +116,32 @@
                 android:scrollHorizontally="true"
                 android:singleLine="true"
                 android:text="正在定位中"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/muted"
                 android:textSize="12sp" />
 
             <LinearLayout
-                android:layout_width="88dp"
+                android:layout_width="92dp"
                 android:layout_height="44dp"
-                android:gravity="center_vertical"
+                android:gravity="center_vertical|end"
                 android:orientation="horizontal">
 
-                <TextView
+                <ImageView
                     android:id="@+id/aboutButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:background="@null"
-                    android:contentDescription="关于 miku camera"
-                    android:gravity="center"
-                    android:text="🥰"
-                    android:textColor="@color/white"
-                    android:textSize="20sp"
-                    android:translationX="4dp" />
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/overlay_circle_button"
+                    android:clickable="true"
+                    android:contentDescription="相机设置"
+                    android:focusable="true"
+                    android:padding="9dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_toolbar_settings" />
 
                 <FrameLayout
                     android:id="@+id/flashButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="8dp"
                     android:background="@drawable/overlay_circle_button"
                     android:clickable="true"
                     android:clipChildren="false"
@@ -152,46 +149,30 @@
                     android:contentDescription="闪光灯"
                     android:focusable="true">
 
-                <!-- Tight box around ⚡ so ❌ / A sit on the glyph, not the circle edge -->
-                <FrameLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:clipChildren="false"
-                    android:clipToPadding="false">
-
-                    <TextView
+                    <ImageView
                         android:id="@+id/flashIcon"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:includeFontPadding="false"
-                        android:text="⚡"
-                        android:textColor="@color/white"
-                        android:textSize="20sp" />
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_toolbar_flash_off" />
 
                     <TextView
                         android:id="@+id/flashBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="bottom|end"
-                        android:includeFontPadding="false"
-                        android:text="A"
-                        android:textColor="@color/white"
-                        android:textSize="10sp"
-                        android:textStyle="bold"
-                        android:translationX="3dp"
-                        android:translationY="2dp"
                         android:visibility="gone" />
-                </FrameLayout>
                 </FrameLayout>
             </LinearLayout>
         </LinearLayout>
 
+        <!-- AI mode step indicator floating at top of viewfinder -->
         <LinearLayout
             android:id="@+id/aiCaptureProgressBar"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:background="#99000000"
+            android:layout_height="38dp"
+            android:background="#D9F6F9F8"
             android:gravity="center"
             android:orientation="horizontal"
             android:paddingStart="24dp"
@@ -203,7 +184,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="● 拍照"
-                android:textColor="@color/accent"
+                android:textColor="@color/accent_ink"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -211,38 +192,38 @@
                 android:id="@+id/aiCaptureConnector"
                 android:layout_width="0dp"
                 android:layout_height="1dp"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:background="#55FFFFFF" />
+                android:background="@color/outline" />
 
             <TextView
                 android:id="@+id/aiPromptStep"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="○ 提示词"
-                android:textColor="#77FFFFFF"
+                android:textColor="@color/muted"
                 android:textSize="13sp" />
 
             <View
                 android:id="@+id/aiPromptConnector"
                 android:layout_width="0dp"
                 android:layout_height="1dp"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:background="#55FFFFFF" />
+                android:background="@color/outline" />
 
             <TextView
                 android:id="@+id/aiGenerateStep"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="○ AI生成"
-                android:textColor="#77FFFFFF"
+                android:textColor="@color/muted"
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- 3:4 capture FOV (positioned in code) -->
+        <!-- 3:4 full-width capture viewfinder (like Figure 1) -->
         <FrameLayout
             android:id="@+id/viewfinderHost"
             android:layout_width="match_parent"
@@ -264,20 +245,20 @@
                 android:layout_height="match_parent" />
         </FrameLayout>
 
-        <!-- Shutter / editor — bottom of the 9:16 stage -->
+        <!-- Bottom chrome: shutter controls or watermark editor -->
         <FrameLayout
             android:id="@+id/bottomChrome"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
-            android:background="@color/black">
+            android:background="@color/background">
 
             <LinearLayout
                 android:id="@+id/captureControls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:background="@color/black"
+                android:background="@color/background"
                 android:gravity="center"
                 android:orientation="vertical"
                 android:paddingStart="8dp"
@@ -313,20 +294,20 @@
                             android:layout_gravity="center"
                             android:insetTop="0dp"
                             android:insetBottom="0dp"
-                            android:minHeight="44dp"
                             android:maxLines="1"
+                            android:minHeight="44dp"
                             android:paddingStart="10dp"
                             android:paddingEnd="12dp"
                             android:text="导入照片"
-                            android:textColor="@color/accent"
+                            android:textAllCaps="false"
+                            android:textColor="@color/accent_ink"
                             android:textSize="13sp"
+                            android:visibility="gone"
+                            app:cornerRadius="12dp"
                             app:icon="@drawable/ic_import_photo"
                             app:iconGravity="textStart"
                             app:iconPadding="6dp"
-                            app:iconTint="@color/accent"
-                            app:strokeColor="@color/accent"
-                            app:strokeWidth="1dp"
-                            android:visibility="gone" />
+                            app:iconTint="@color/accent_ink" />
                     </FrameLayout>
 
                     <ImageButton
@@ -360,13 +341,13 @@
                 android:id="@+id/editorControls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:background="@color/black"
+                android:layout_gravity="bottom"
+                android:background="@color/background"
                 android:orientation="vertical"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:paddingTop="6dp"
-                android:paddingBottom="6dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="4dp"
                 android:visibility="gone">
 
                 <LinearLayout
@@ -379,29 +360,31 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="名称"
-                        android:textColor="@color/white"
-                        android:textSize="12sp" />
+                        android:textColor="@color/ink"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
 
                     <EditText
                         android:id="@+id/watermarkNameEditText"
                         android:layout_width="0dp"
-                        android:layout_height="40dp"
-                        android:layout_marginStart="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="10dp"
                         android:layout_weight="1"
-                        android:backgroundTint="@color/white"
+                        android:background="@drawable/ai_prompt_background"
                         android:hint="例如：工作水印"
-                        android:textColorHint="#99FFFFFF"
                         android:inputType="textCapSentences"
                         android:maxLines="1"
-                        android:paddingStart="0dp"
-                        android:paddingEnd="0dp"
-                        android:textColor="@color/white"
-                        android:textSize="14sp" />
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:textColor="@color/ink"
+                        android:textColorHint="@color/muted"
+                        android:textSize="13sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -409,58 +392,82 @@
                         android:id="@+id/uploadButton"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="36dp"
+                        android:layout_height="38dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:minHeight="36dp"
+                        android:minHeight="38dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
                         android:text="上传 PNG"
-                        android:textSize="12sp" />
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        app:cornerRadius="10dp" />
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/timeSwitch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:minHeight="38dp"
                         android:text="时间"
-                        android:textColor="@color/white"
+                        android:textColor="@color/ink"
                         android:textSize="12sp" />
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/locationSwitch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_weight="1"
+                        android:minHeight="38dp"
                         android:text="地点"
-                        android:textColor="@color/white"
+                        android:textColor="@color/ink"
                         android:textSize="12sp" />
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/streetSwitch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_weight="1"
+                        android:minHeight="38dp"
                         android:text="门牌"
-                        android:textColor="@color/white"
+                        android:textColor="@color/ink"
                         android:textSize="12sp"
                         android:visibility="gone" />
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="PNG 描边"
-                    android:textColor="@color/white"
-                    android:textSize="12sp" />
-
-                <SeekBar
-                    android:id="@+id/outlineSeekBar"
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:max="24"
-                    android:paddingTop="0dp"
-                    android:paddingBottom="0dp" />
+                    android:layout_height="36dp"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="PNG 描边"
+                        android:textColor="@color/ink"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <SeekBar
+                        android:id="@+id/outlineSeekBar"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:max="24"
+                        android:paddingTop="0dp"
+                        android:paddingBottom="0dp" />
+                </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -468,13 +475,16 @@
                         android:id="@+id/deleteWatermarkButton"
                         style="@style/Widget.Material3.Button"
                         android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#E53935"
+                        android:layout_height="38dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:minHeight="36dp"
+                        android:minHeight="38dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
                         android:text="删除"
-                        android:textColor="@color/white" />
+                        android:textAllCaps="false"
+                        android:textSize="13sp"
+                        app:cornerRadius="10dp" />
 
                     <Space
                         android:layout_width="0dp"
@@ -483,546 +493,927 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/cancelEditButton"
-                        style="@style/Widget.Material3.Button.TextButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="36dp"
+                        android:layout_height="38dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:minHeight="36dp"
+                        android:minHeight="38dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
                         android:text="取消"
-                        android:textColor="@color/white" />
+                        android:textAllCaps="false"
+                        android:textSize="13sp"
+                        app:cornerRadius="10dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/saveWatermarkButton"
                         style="@style/Widget.Material3.Button"
                         android:layout_width="wrap_content"
-                        android:layout_height="36dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="8dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:minHeight="36dp"
-                        android:text="保存水印" />
+                        android:minHeight="38dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:text="保存水印"
+                        android:textAllCaps="false"
+                        android:textSize="13sp"
+                        app:cornerRadius="10dp" />
                 </LinearLayout>
             </LinearLayout>
         </FrameLayout>
+    </FrameLayout>
 
-        <FrameLayout
-            android:id="@+id/aiPageHost"
+    <!-- AI Page Host: direct child of root, padded at top below hole-punch and ~50px at bottom -->
+    <FrameLayout
+        android:id="@+id/aiPageHost"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/background"
+        android:visibility="gone">
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/black"
-            android:visibility="gone">
+            android:orientation="vertical">
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical">
+                android:layout_height="48dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
+
+                <ImageView
+                    android:id="@+id/aiPageBackButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/overlay_circle_button"
+                    android:clickable="true"
+                    android:contentDescription="退出 AI mode"
+                    android:focusable="true"
+                    android:padding="9dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_toolbar_back" />
+
+                <ImageView
+                    android:id="@+id/aiPageSettingsButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/overlay_circle_button"
+                    android:clickable="true"
+                    android:contentDescription="AI 设置"
+                    android:focusable="true"
+                    android:padding="9dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_toolbar_settings" />
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AI MODE"
+                    android:textColor="@color/accent_ink"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp">
+
+                <TextView
+                    android:id="@+id/aiPageCaptureStep"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="✓ 拍照"
+                    android:textColor="@color/accent_ink"
+                    android:textSize="13sp" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:background="@color/accent" />
+
+                <TextView
+                    android:id="@+id/aiPagePromptStep"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="● 提示词"
+                    android:textColor="@color/accent_ink"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:id="@+id/aiPagePromptConnector"
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:background="@color/surface_soft" />
+
+                <TextView
+                    android:id="@+id/aiPageGenerateStep"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="○ AI生成"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
 
                 <LinearLayout
+                    android:id="@+id/aiPromptPanel"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
                     android:paddingStart="16dp"
-                    android:paddingEnd="16dp">
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="4dp">
 
-                    <TextView
-                        android:id="@+id/aiPageBackButton"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:background="@drawable/overlay_circle_button"
-                        android:contentDescription="退出 AI mode"
-                        android:gravity="center"
-                        android:text="←"
-                        android:textColor="@color/white"
-                        android:textSize="24sp" />
-
-                    <TextView
-                        android:id="@+id/aiPageSettingsButton"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:layout_marginStart="8dp"
-                        android:background="@drawable/overlay_circle_button"
-                        android:contentDescription="AI 设置"
-                        android:gravity="center"
-                        android:text="⚙"
-                        android:textColor="@color/white"
-                        android:textSize="20sp" />
-
-                    <Space
-                        android:layout_width="0dp"
-                        android:layout_height="1dp"
-                        android:layout_weight="1" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="AI MODE"
-                        android:textColor="@color/accent"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:gravity="center"
-                    android:orientation="horizontal"
-                    android:paddingStart="24dp"
-                    android:paddingEnd="24dp">
-
-                    <TextView
-                        android:id="@+id/aiPageCaptureStep"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✓ 拍照"
-                        android:textColor="@color/accent"
-                        android:textSize="13sp" />
-
-                    <View
-                        android:layout_width="0dp"
-                        android:layout_height="1dp"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginEnd="10dp"
-                        android:layout_weight="1"
-                        android:background="@color/accent" />
-
-                    <TextView
-                        android:id="@+id/aiPagePromptStep"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="● 提示词"
-                        android:textColor="@color/accent"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-
-                    <View
-                        android:id="@+id/aiPagePromptConnector"
-                        android:layout_width="0dp"
-                        android:layout_height="1dp"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginEnd="10dp"
-                        android:layout_weight="1"
-                        android:background="#55FFFFFF" />
-
-                    <TextView
-                        android:id="@+id/aiPageGenerateStep"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="○ AI生成"
-                        android:textColor="#77FFFFFF"
-                        android:textSize="13sp" />
-                </LinearLayout>
-
-                <FrameLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-
-                    <ScrollView
-                        android:id="@+id/aiPromptPanel"
+                    <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:fillViewport="true">
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:orientation="horizontal">
 
                         <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:paddingStart="20dp"
-                            android:paddingEnd="20dp"
-                            android:paddingBottom="20dp">
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginEnd="6dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
 
-                            <ImageView
-                                android:id="@+id/aiOriginalPreview"
+                            <FrameLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="210dp"
-                                android:adjustViewBounds="true"
-                                android:background="#181818"
-                                android:contentDescription="已拍摄的干净照片"
-                                android:scaleType="centerInside" />
+                                android:layout_height="0dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/segment_panel"
+                                android:padding="6dp">
+
+                                <ImageView
+                                    android:id="@+id/aiOriginalPreview"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:adjustViewBounds="false"
+                                    android:contentDescription="已拍摄的干净照片"
+                                    android:scaleType="fitCenter" />
+                            </FrameLayout>
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="16dp"
-                                android:text="mikumiku提示词"
-                                android:textColor="@color/white"
-                                android:textSize="18sp"
+                                android:layout_marginTop="4dp"
+                                android:gravity="center"
+                                android:text="原图"
+                                android:textColor="@color/ink"
+                                android:textSize="12sp"
                                 android:textStyle="bold" />
 
-                            <EditText
-                                android:id="@+id/aiPromptEditText"
+                            <LinearLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="120dp"
-                                android:layout_marginTop="8dp"
-                                android:background="@drawable/ai_prompt_background"
-                                android:gravity="top|start"
-                                android:hint="可在这里修改本次提示词"
-                                android:inputType="textCapSentences|textMultiLine"
-                                android:maxLength="2000"
-                                android:padding="14dp"
-                                android:textColor="@color/white"
-                                android:textColorHint="#77FFFFFF"
-                                android:textSize="15sp" />
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/aiShootOriginalButton"
+                                    android:layout_width="0dp"
+                                    android:layout_height="34dp"
+                                    android:layout_weight="1"
+                                    android:insetTop="0dp"
+                                    android:insetBottom="0dp"
+                                    android:minWidth="0dp"
+                                    android:paddingStart="4dp"
+                                    android:paddingEnd="4dp"
+                                    android:text="拍摄"
+                                    android:textAllCaps="false"
+                                    android:textSize="12sp"
+                                    app:cornerRadius="10dp" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/aiImportOriginalButton"
+                                    android:layout_width="0dp"
+                                    android:layout_height="34dp"
+                                    android:layout_marginStart="6dp"
+                                    android:layout_weight="1"
+                                    android:insetTop="0dp"
+                                    android:insetBottom="0dp"
+                                    android:minWidth="0dp"
+                                    android:paddingStart="4dp"
+                                    android:paddingEnd="4dp"
+                                    android:text="导入"
+                                    android:textAllCaps="false"
+                                    android:textSize="12sp"
+                                    app:cornerRadius="10dp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <FrameLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="0dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/segment_panel"
+                                android:padding="6dp">
+
+                                <ImageView
+                                    android:id="@+id/aiReferencePreview"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:adjustViewBounds="false"
+                                    android:contentDescription="形象参考"
+                                    android:scaleType="fitCenter" />
+
+                                <TextView
+                                    android:id="@+id/aiReferenceEmptyHint"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:gravity="center"
+                                    android:text="无形象参考\n（可在设置预置）"
+                                    android:textColor="@color/muted"
+                                    android:textSize="11sp" />
+
+                                <TextView
+                                    android:id="@+id/aiReferenceClearButton"
+                                    android:layout_width="24dp"
+                                    android:layout_height="24dp"
+                                    android:layout_gravity="top|end"
+                                    android:background="@drawable/overlay_circle_button"
+                                    android:clickable="true"
+                                    android:contentDescription="清除形象参考"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:text="✕"
+                                    android:textColor="@color/ink"
+                                    android:textSize="11sp"
+                                    android:visibility="gone" />
+                            </FrameLayout>
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
-                                android:text="可自行在提示词中申明动作、衣服等"
-                                android:textColor="#99FFFFFF"
-                                android:textSize="12sp" />
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/aiVisualStyleText"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:textColor="#CCFFFFFF"
-                                    android:textSize="13sp" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginEnd="6dp"
-                                    android:text="切换"
-                                    android:textColor="@color/white"
-                                    android:textSize="13sp" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/aiVisualStyleToggleButton"
-                                    style="@style/Widget.Material3.Button.OutlinedButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="36dp"
-                                    android:minWidth="64dp"
-                                    android:minHeight="0dp"
-                                    android:paddingStart="10dp"
-                                    android:paddingEnd="10dp"
-                                    android:textSize="12sp" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/aiOutfitStyleText"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:textColor="#CCFFFFFF"
-                                    android:textSize="13sp" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginEnd="6dp"
-                                    android:text="切换"
-                                    android:textColor="@color/white"
-                                    android:textSize="13sp" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/aiOutfitStyleToggleButton"
-                                    style="@style/Widget.Material3.Button.OutlinedButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="36dp"
-                                    android:minWidth="64dp"
-                                    android:minHeight="0dp"
-                                    android:paddingStart="10dp"
-                                    android:paddingEnd="10dp"
-                                    android:textSize="12sp" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/aiTimeEditText"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:clickable="true"
-                                    android:focusable="true"
-                                    android:textColor="#CCFFFFFF"
-                                    android:textSize="13sp" />
-
-                                <com.google.android.material.switchmaterial.SwitchMaterial
-                                    android:id="@+id/aiTimeWatermarkSwitch"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:checked="true"
-                                    android:text="时间水印"
-                                    android:textColor="@color/white"
-                                    android:textSize="13sp" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/aiLocationEditText"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:clickable="true"
-                                    android:focusable="true"
-                                    android:textColor="#CCFFFFFF"
-                                    android:textSize="13sp" />
-
-                                <com.google.android.material.switchmaterial.SwitchMaterial
-                                    android:id="@+id/aiLocationWatermarkSwitch"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:checked="true"
-                                    android:text="地点水印"
-                                    android:textColor="@color/white"
-                                    android:textSize="13sp" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="16dp"
+                                android:layout_marginTop="4dp"
                                 android:gravity="center"
+                                android:text="形象参考"
+                                android:textColor="@color/ink"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:gravity="center_vertical"
                                 android:orientation="horizontal">
 
                                 <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/aiRetakeButton"
-                                    style="@style/Widget.Material3.Button.TextButton"
+                                    android:id="@+id/aiShootReferenceButton"
                                     android:layout_width="0dp"
-                                    android:layout_height="48dp"
+                                    android:layout_height="34dp"
                                     android:layout_weight="1"
-                                    android:text="重新拍摄"
-                                    android:textColor="@color/white" />
+                                    android:insetTop="0dp"
+                                    android:insetBottom="0dp"
+                                    android:minWidth="0dp"
+                                    android:paddingStart="4dp"
+                                    android:paddingEnd="4dp"
+                                    android:text="拍摄"
+                                    android:textAllCaps="false"
+                                    android:textSize="12sp"
+                                    app:cornerRadius="10dp" />
 
                                 <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/aiGenerateButton"
-                                    style="@style/Widget.Material3.Button"
+                                    android:id="@+id/aiImportReferenceButton"
                                     android:layout_width="0dp"
-                                    android:layout_height="48dp"
-                                    android:layout_marginStart="10dp"
-                                    android:layout_weight="1.4"
-                                    android:text="开始生成" />
+                                    android:layout_height="34dp"
+                                    android:layout_marginStart="6dp"
+                                    android:layout_weight="1"
+                                    android:insetTop="0dp"
+                                    android:insetBottom="0dp"
+                                    android:minWidth="0dp"
+                                    android:paddingStart="4dp"
+                                    android:paddingEnd="4dp"
+                                    android:text="导入"
+                                    android:textAllCaps="false"
+                                    android:textSize="12sp"
+                                    app:cornerRadius="10dp" />
                             </LinearLayout>
                         </LinearLayout>
-                    </ScrollView>
+                    </LinearLayout>
 
                     <LinearLayout
-                        android:id="@+id/aiGeneratingPanel"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="28dp"
-                        android:visibility="gone">
-
-                        <ProgressBar
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:indeterminateTint="@color/accent" />
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
                         <TextView
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="22dp"
-                            android:text="Miku 创作中…"
-                            android:textColor="@color/white"
-                            android:textSize="22sp"
+                            android:layout_weight="1"
+                            android:text="让 Miku 走进这一刻"
+                            android:textColor="@color/ink"
+                            android:textSize="13sp"
                             android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <EditText
+                        android:id="@+id/aiPromptEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="76dp"
+                        android:layout_marginTop="4dp"
+                        android:background="@drawable/ai_prompt_background"
+                        android:gravity="top|start"
+                        android:hint="可在这里修改本次提示词"
+                        android:inputType="textCapSentences|textMultiLine"
+                        android:maxLength="2000"
+                        android:padding="10dp"
+                        android:textColor="@color/ink"
+                        android:textColorHint="@color/muted"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="也可以描述动作、表情与穿搭"
+                        android:textColor="@color/muted"
+                        android:textSize="11sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
                         <TextView
-                            android:id="@+id/aiGenerationStatusText"
-                            android:layout_width="match_parent"
+                            android:id="@+id/aiVisualStyleText"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:gravity="center"
-                            android:text="正在准备干净照片"
-                            android:textColor="#BBFFFFFF"
-                            android:textSize="14sp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/aiCancelGenerationButton"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:layout_marginTop="24dp"
-                            android:text="取消生成"
-                            android:textColor="#FF5C63"
-                            app:strokeColor="#FF5C63"
-                            app:strokeWidth="2dp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="20dp"
-                            android:text="以下操作会将当前任务转为后台"
-                            android:textColor="#99FFFFFF"
+                            android:layout_weight="1"
+                            android:text="形象"
+                            android:textColor="@color/ink"
                             android:textSize="13sp" />
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/aiEditPromptDuringGenerationButton"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:layout_marginTop="8dp"
-                            android:backgroundTint="#153D39"
-                            android:text="修改提示词"
-                            android:textColor="@color/white"
-                            app:strokeColor="@color/accent"
-                            app:strokeWidth="2dp" />
+                        <LinearLayout
+                            android:layout_width="200dp"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/segment_panel"
+                            android:orientation="horizontal"
+                            android:padding="3dp">
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/aiRetakeDuringGenerationButton"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:layout_marginTop="8dp"
-                            android:backgroundTint="#153D39"
-                            android:text="重新拍摄"
-                            android:textColor="@color/white"
-                            app:strokeColor="@color/accent"
-                            app:strokeWidth="2dp" />
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiVisualStyleToggleButton"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minWidth="0dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:text="二次元"
+                                android:textAllCaps="false"
+                                android:textSize="12sp"
+                                app:cornerRadius="10dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiRealisticButton"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minWidth="0dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:text="真人"
+                                android:textAllCaps="false"
+                                android:textSize="12sp"
+                                app:cornerRadius="10dp" />
+                        </LinearLayout>
                     </LinearLayout>
 
                     <LinearLayout
-                        android:id="@+id/aiResultPanel"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:orientation="vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingBottom="12dp"
-                        android:visibility="gone">
-
-                        <ImageView
-                            android:id="@+id/aiResultPreview"
-                            android:layout_width="match_parent"
-                            android:layout_height="0dp"
-                            android:layout_weight="1"
-                            android:adjustViewBounds="true"
-                            android:background="#181818"
-                            android:contentDescription="AI 生成结果，按住查看原图"
-                            android:scaleType="centerInside" />
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
                         <TextView
-                            android:layout_width="match_parent"
+                            android:id="@+id/aiOutfitStyleText"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:paddingTop="5dp"
-                            android:paddingBottom="5dp"
-                            android:text="按住图片查看原图"
-                            android:textColor="#99FFFFFF"
-                            android:textSize="12sp" />
+                            android:layout_weight="1"
+                            android:text="服装"
+                            android:textColor="@color/ink"
+                            android:textSize="13sp" />
 
                         <LinearLayout
-                            android:id="@+id/aiResultSaveActions"
-                            android:layout_width="match_parent"
+                            android:layout_width="200dp"
                             android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/aiSaveResultButton"
-                                style="@style/Widget.Material3.Button"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_weight="1"
-                                android:text="修改提示词"
-                                android:textSize="12sp" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/aiSaveOriginalButton"
-                                style="@style/Widget.Material3.Button.TonalButton"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="6dp"
-                                android:layout_weight="1"
-                                android:text="重新拍摄"
-                                android:textSize="12sp" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/aiSaveBothButton"
-                                style="@style/Widget.Material3.Button.TonalButton"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="6dp"
-                                android:layout_weight="1"
-                                android:text="保存图片"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:id="@+id/aiResultActions"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:orientation="horizontal">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/aiEditPromptButton"
-                                style="@style/Widget.Material3.Button.TextButton"
-                                android:layout_width="wrap_content"
-                                android:layout_height="40dp"
-                                android:text="修改提示词"
-                                android:textColor="@color/white"
-                                android:textSize="12sp" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/aiRegenerateButton"
-                                style="@style/Widget.Material3.Button.TextButton"
-                                android:layout_width="wrap_content"
-                                android:layout_height="40dp"
-                                android:text="重新生成"
-                                android:textColor="@color/accent"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:id="@+id/aiResultPostSaveActions"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
+                            android:background="@drawable/segment_panel"
                             android:orientation="horizontal"
-                            android:visibility="gone">
+                            android:padding="3dp">
 
                             <com.google.android.material.button.MaterialButton
-                                android:id="@+id/aiSavedRetakeButton"
-                                style="@style/Widget.Material3.Button.TonalButton"
+                                android:id="@+id/aiOutfitStyleToggleButton"
                                 android:layout_width="0dp"
-                                android:layout_height="44dp"
+                                android:layout_height="38dp"
                                 android:layout_weight="1"
-                                android:text="重新拍摄"
-                                android:textSize="12sp" />
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minWidth="0dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:text="公式服"
+                                android:textAllCaps="false"
+                                android:textSize="12sp"
+                                app:cornerRadius="10dp" />
 
                             <com.google.android.material.button.MaterialButton
-                                android:id="@+id/aiSavedEditPromptButton"
-                                style="@style/Widget.Material3.Button"
+                                android:id="@+id/aiAdaptiveButton"
                                 android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="8dp"
+                                android:layout_height="38dp"
                                 android:layout_weight="1"
-                                android:text="修改提示词"
-                                android:textSize="12sp" />
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minWidth="0dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:text="非公式服"
+                                android:textAllCaps="false"
+                                android:textSize="12sp"
+                                app:cornerRadius="10dp" />
                         </LinearLayout>
                     </LinearLayout>
-                </FrameLayout>
-            </LinearLayout>
-        </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="分辨率"
+                            android:textColor="@color/ink"
+                            android:textSize="13sp" />
+
+                        <LinearLayout
+                            android:layout_width="200dp"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/segment_panel"
+                            android:orientation="horizontal"
+                            android:padding="3dp">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiResolution1"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minWidth="0dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:text="1K"
+                                android:textAllCaps="false"
+                                android:textSize="12sp"
+                                app:cornerRadius="10dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiResolution2"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minWidth="0dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:text="2K"
+                                android:textAllCaps="false"
+                                android:textSize="12sp"
+                                app:cornerRadius="10dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/aiResolution4"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minWidth="0dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:text="4K"
+                                android:textAllCaps="false"
+                                android:textSize="12sp"
+                                app:cornerRadius="10dp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/aiResolutionHint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/aiTimeEditText"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/surface_panel"
+                            android:clickable="true"
+                            android:ellipsize="end"
+                            android:focusable="true"
+                            android:gravity="center_vertical|start"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:singleLine="true"
+                            android:textColor="@color/ink"
+                            android:textSize="13sp" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/aiTimeWatermarkSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:checked="true"
+                            android:text="时间水印"
+                            android:textColor="@color/ink"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/aiLocationEditText"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/surface_panel"
+                            android:clickable="true"
+                            android:ellipsize="end"
+                            android:focusable="true"
+                            android:gravity="center_vertical|start"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:singleLine="true"
+                            android:textColor="@color/ink"
+                            android:textSize="13sp" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/aiLocationWatermarkSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:checked="true"
+                            android:text="地点水印"
+                            android:textColor="@color/ink"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiRetakeButton"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="重新拍摄"
+                            android:textAllCaps="false"
+                            android:visibility="gone"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiGenerateAllButton"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="我全都要 ×4"
+                            android:textAllCaps="false"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiGenerateButton"
+                            style="@style/Widget.Material3.Button"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1.4"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="开始生成"
+                            android:textAllCaps="false"
+                            app:cornerRadius="12dp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/aiGeneratingPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingStart="28dp"
+                    android:paddingEnd="28dp"
+                    android:paddingBottom="24dp"
+                    android:visibility="gone">
+
+                    <ProgressBar
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:indeterminateTint="@color/accent" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Miku 创作中…"
+                        android:textColor="@color/ink"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/aiGenerationStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:text="正在准备干净照片"
+                        android:textColor="@color/muted"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/aiCancelGenerationButton"
+                        style="@style/Widget.Material3.Button"
+                        android:layout_width="180dp"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="20dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="取消生成"
+                        android:textAllCaps="false"
+                        app:cornerRadius="12dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="以下操作会将当前任务转为后台"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/aiEditPromptDuringGenerationButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="180dp"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="8dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="修改提示词"
+                        android:textAllCaps="false"
+                        app:cornerRadius="12dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/aiRetakeDuringGenerationButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="180dp"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="8dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="重新拍摄"
+                        android:textAllCaps="false"
+                        app:cornerRadius="12dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/aiResultPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="4dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:id="@+id/aiResultPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:adjustViewBounds="false"
+                        android:background="@drawable/segment_panel"
+                        android:contentDescription="AI 生成结果，按住查看原图"
+                        android:padding="6dp"
+                        android:scaleType="fitCenter" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:paddingTop="6dp"
+                        android:paddingBottom="6dp"
+                        android:text="按住图片查看原图"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp" />
+
+                    <LinearLayout
+                        android:id="@+id/aiResultSaveActions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiSaveResultButton"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:maxLines="1"
+                            android:minWidth="0dp"
+                            android:paddingStart="6dp"
+                            android:paddingEnd="6dp"
+                            android:singleLine="true"
+                            android:text="修改提示词"
+                            android:textAllCaps="false"
+                            android:textSize="12sp"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiSaveOriginalButton"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:maxLines="1"
+                            android:minWidth="0dp"
+                            android:paddingStart="6dp"
+                            android:paddingEnd="6dp"
+                            android:singleLine="true"
+                            android:text="重新拍摄"
+                            android:textAllCaps="false"
+                            android:textSize="12sp"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiSaveBothButton"
+                            style="@style/Widget.Material3.Button"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:maxLines="1"
+                            android:minWidth="0dp"
+                            android:paddingStart="6dp"
+                            android:paddingEnd="6dp"
+                            android:singleLine="true"
+                            android:text="保存图片"
+                            android:textAllCaps="false"
+                            android:textSize="12sp"
+                            app:cornerRadius="12dp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/aiResultActions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiEditPromptButton"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="40dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="修改提示词"
+                            android:textAllCaps="false"
+                            android:textColor="@color/ink"
+                            android:textSize="12sp"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiRegenerateButton"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="40dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="重新生成"
+                            android:textAllCaps="false"
+                            android:textColor="@color/accent"
+                            android:textSize="12sp"
+                            app:cornerRadius="12dp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/aiResultPostSaveActions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiSavedRetakeButton"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="重新拍摄"
+                            android:textAllCaps="false"
+                            android:textSize="12sp"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/aiSavedEditPromptButton"
+                            style="@style/Widget.Material3.Button"
+                            android:layout_width="0dp"
+                            android:layout_height="44dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="修改提示词"
+                            android:textAllCaps="false"
+                            android:textSize="12sp"
+                            app:cornerRadius="12dp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
     </FrameLayout>
 </FrameLayout>

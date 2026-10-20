@@ -137,18 +137,18 @@ class AiOverlayService : Service() {
         val running = tasks.count { it.state == AiTransactionState.DRAFT || it.state == AiTransactionState.RUNNING }
         val success = tasks.count { it.state == AiTransactionState.SUCCESS }
         val failed = tasks.count { it.state == AiTransactionState.FAILED }
-        gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL; setPadding(dp(12), dp(10), dp(12), dp(10))
-        addView(counter(running, Color.BLACK)); addView(separator()); addView(counter(success, Color.rgb(30, 140, 75))); addView(separator()); addView(counter(failed, Color.rgb(205, 55, 55)))
-        background = rounded(Color.WHITE); elevation = dp(8).toFloat()
+        gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL; setPadding(dp(12), dp(8), dp(12), dp(8))
+        addView(counter(running, MikuUi.ink)); addView(separator()); addView(counter(success, MikuUi.accentInk)); addView(separator()); addView(counter(failed, Color.rgb(205, 55, 55)))
+        background = rounded(MikuUi.surface); elevation = dp(8).toFloat()
     }
 
     private fun expandedView(tasks: List<AiTransaction>, maxListHeight: Int): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(10), dp(12), dp(10)); background = rounded(Color.WHITE); elevation = dp(8).toFloat()
+        orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)); background = rounded(MikuUi.surface); elevation = dp(8).toFloat()
         val header = LinearLayout(this@AiOverlayService).apply {
             gravity = Gravity.CENTER_VERTICAL; orientation = LinearLayout.HORIZONTAL; setPadding(0, 0, 0, dp(8))
-            addView(TextView(this@AiOverlayService).apply { text = ">"; textSize = 16f; setTextColor(Color.DKGRAY); setPadding(0, 0, dp(24), 0) })
-            addView(counter(tasks.count { it.state == AiTransactionState.DRAFT || it.state == AiTransactionState.RUNNING }, Color.BLACK)); addView(separator())
-            addView(counter(tasks.count { it.state == AiTransactionState.SUCCESS }, Color.rgb(30, 140, 75))); addView(separator())
+            addView(TextView(this@AiOverlayService).apply { text = ">"; textSize = 16f; setTextColor(MikuUi.ink); setPadding(0, 0, dp(24), 0) })
+            addView(counter(tasks.count { it.state == AiTransactionState.DRAFT || it.state == AiTransactionState.RUNNING }, MikuUi.ink)); addView(separator())
+            addView(counter(tasks.count { it.state == AiTransactionState.SUCCESS }, MikuUi.accentInk)); addView(separator())
             addView(counter(tasks.count { it.state == AiTransactionState.FAILED }, Color.rgb(205, 55, 55)))
         }
         addView(header)
@@ -279,7 +279,7 @@ class AiOverlayService : Service() {
         val index = AiTransactionStore(this@AiOverlayService).all().indexOfFirst { it.id == task.id } + 1
         gravity = Gravity.CENTER_VERTICAL; orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(9), 0, dp(9))
         addView(TextView(this@AiOverlayService).apply {
-            text = "$index，${SimpleDateFormat("HH:mm:ss", Locale.CHINA).format(Date(task.createdAt))}，${task.message}"
+            text = "${task.configuration?.visualStyle?.displayName ?: index} · ${task.configuration?.outfitStyle?.displayName.orEmpty()} · ${task.configuration?.resolution?.label ?: "2K"}\n${task.message}"
             textSize = 13f; setTextColor(stateColor(task.state)); maxLines = 2
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { openTask(task.id) }
@@ -300,8 +300,8 @@ class AiOverlayService : Service() {
     }
 
     private fun counter(count: Int, color: Int) = TextView(this).apply { text = count.toString(); textSize = 15f; setTextColor(color) }
-    private fun separator() = TextView(this).apply { text = " | "; textSize = 15f; setTextColor(Color.GRAY) }
-    private fun stateColor(state: AiTransactionState) = when (state) { AiTransactionState.DRAFT, AiTransactionState.RUNNING -> Color.BLACK; AiTransactionState.SUCCESS -> Color.rgb(30, 140, 75); AiTransactionState.FAILED -> Color.rgb(205, 55, 55) }
+    private fun separator() = TextView(this).apply { text = " | "; textSize = 15f; setTextColor(MikuUi.muted) }
+    private fun stateColor(state: AiTransactionState) = when (state) { AiTransactionState.DRAFT, AiTransactionState.RUNNING -> MikuUi.ink; AiTransactionState.SUCCESS -> MikuUi.accentInk; AiTransactionState.FAILED -> Color.rgb(205, 55, 55) }
     private fun rounded(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(12).toFloat() }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun notification(): android.app.Notification {

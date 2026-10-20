@@ -1567,23 +1567,17 @@ class MainActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             MikuUi.editText(this, 14)
         }
-        val time = SwitchMaterial(this).apply {
-            text = "时间水印"
-            isChecked = current.includeTimeWatermark
-            minHeight = dp(44)
-            MikuUi.switch(this)
-        }
-        val location = SwitchMaterial(this).apply {
-            text = "地点水印"
-            isChecked = current.includeLocationWatermark
-            minHeight = dp(44)
-            MikuUi.switch(this)
-        }
 
         fun saveNow() {
+            val latest = aiSettingsStore.load()
             val promptText = prompt.text?.toString()?.trim()?.ifBlank { AiSettingsStore.DEFAULT_PROMPT }
                 ?: AiSettingsStore.DEFAULT_PROMPT
-            aiSettingsStore.savePreferences(startAi, promptText, time.isChecked, location.isChecked)
+            aiSettingsStore.savePreferences(
+                startAi,
+                promptText,
+                latest.includeTimeWatermark,
+                latest.includeLocationWatermark
+            )
         }
 
         section("默认启动")
@@ -1701,12 +1695,6 @@ class MainActivity : AppCompatActivity() {
         onPresetReferenceUpdated = { refreshPresetRefUi() }
         refreshPresetRefUi()
         content.addView(presetRefCard)
-
-        section("生成水印")
-        time.setOnCheckedChangeListener { _, _ -> saveNow() }
-        location.setOnCheckedChangeListener { _, _ -> saveNow() }
-        content.addView(time)
-        content.addView(location)
 
         section("服务与应用")
         content.addView(MaterialButton(this).apply {

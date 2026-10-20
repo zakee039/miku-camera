@@ -94,7 +94,8 @@ class AiImageClient {
                 record("reference=${refSize.first}x${refSize.second}, bytes=${validReference.length()}")
             }
             record("promptChars=${prompt.length} (content not logged)")
-            record("requestFields=model,prompt,quality,output_format,image[]")
+            record("resolution=${resolution.label}, size=${resolution.openAiSize(sourceSize.first, sourceSize.second)}")
+            record("requestFields=model,prompt,quality,size,output_format,image[]")
 
             val boundary = "----MikuCamera${UUID.randomUUID()}"
             connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -123,6 +124,7 @@ class AiImageClient {
                 field("model", model.trim())
                 field("prompt", prompt)
                 field("quality", "medium")
+                field("size", resolution.openAiSize(sourceSize.first, sourceSize.second))
                 field("output_format", "jpeg")
                 writer.append("--$boundary\r\n")
                 writer.append("Content-Disposition: form-data; name=\"image[]\"; filename=\"photo.jpg\"\r\n")
@@ -503,13 +505,15 @@ class AiImageClient {
                         })
                     }
                 })
-                put("output_config", JSONObject().apply {
-                    put("response_modalities", org.json.JSONArray().apply { put("image") })
+                put("response_format", JSONObject().apply {
+                    put("type", "image")
+                    put("mime_type", "image/jpeg")
+                    put("image_size", resolution.label)
                 })
             }
             record("promptChars=${prompt.length} (content not logged)")
             record("sourceBytes=${source.length()}, encodedChars=${base64.length}")
-            record("requestFields=model,input,output_config")
+            record("requestFields=model,input,response_format; resolution=${resolution.label}")
 
             val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"

@@ -123,7 +123,7 @@ class AiGenerationService : Service() {
         val destination = store.newFile("miku_ai_result_", ".jpg")
         try {
             store.update(taskId) { it.copy(message = "正在准备干净照片", resultPath = null, resultSaved = false) }
-            val refFile = task.referenceFile
+            val refFile = task.referenceFile?.takeIf { configuration.outfitStyle == AiOutfitStyle.SCENE_ADAPTIVE }
             val prompt = AiPromptBuilder.build(
                 userPrompt = task.prompt,
                 captureTime = task.captureTime,

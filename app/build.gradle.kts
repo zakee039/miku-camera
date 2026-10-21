@@ -11,8 +11,8 @@ android {
         applicationId = "com.zakee.mikucamera"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.7.0"
+        versionCode = 21
+        versionName = "1.7.1"
     }
 
     // Keep the v2 signing key stable so locally installed updates can replace

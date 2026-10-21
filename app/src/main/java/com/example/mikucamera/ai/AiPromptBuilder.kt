@@ -23,18 +23,10 @@ object AiPromptBuilder {
             outfitStyle == AiOutfitStyle.OFFICIAL ->
                 "MANDATORY OFFICIAL OUTFIT MODE: Miku must wear her iconic official-style outfit: turquoise twin tails, gray sleeveless top, black detached sleeves, black pleated skirt, turquoise accents, and thigh-high boots. Do not redesign it into unrelated clothing."
             useReferenceImage ->
-                "MANDATORY REFERENCE-IMAGE OUTFIT & APPEARANCE MODE: Two input images are provided (Image 1 is the photographed scene; Image 2 is the character and outfit reference). Miku wears an outfit, clothing pieces, colors, patterns, silhouette, footwear, and accessories that are generally consistent with Image 2, and follows Image 2's hairstyle and character design details. Do NOT invent a new scene-based outfit, do NOT substitute casual clothes based on the weather or background, and do NOT revert to the classic gray/black official Miku costume unless Image 2 itself wears it."
+                "REFERENCE-IMAGE OUTFIT & APPEARANCE MODE: Two input images are provided (Image 1 is the photographed scene; Image 2 is the character and outfit reference). Miku's styling, outfit, color scheme, and accessories should reference Image 2."
             else ->
                 "MANDATORY SCENE-ADAPTIVE NON-OFFICIAL OUTFIT MODE: First inspect the photographed place, weather, temperature, season, time of day, activity, and social context, then choose a concrete outfit that a person would naturally wear there. Examples include a summer dress or T-shirt and shorts outdoors in heat, a coat and scarf in winter, casual streetwear in a city, sportswear for exercise, hiking clothes in nature, a swimsuit or light resort wear at a beach, school or campus casual wear near a school, or elegant attire at a formal venue. The clothing must visibly respond to this specific scene and must not default to Miku's iconic official costume. STRICTLY FORBIDDEN in this mode: the complete official combination of gray sleeveless top, black detached arm sleeves, black pleated mini skirt, turquoise necktie/accent trim, and thigh-high boots. Do not use stage-performance, cosplay, or generic idol clothing unless the photographed activity itself clearly requires it. Preserve her turquoise twin tails and unmistakable Miku identity through hair and color accents, not by reverting to the official costume."
         }
-        val referenceInstruction = if (useReferenceImage) {
-            """
-            MULTI-IMAGE REFERENCE INSTRUCTION:
-            Two input images are provided:
-            - Image 1 (first image) is the photographed scene to edit. Preserve its background, environment, lighting, composition, aspect ratio, and any real people in it.
-            - Image 2 (second image) is the character and outfit reference image. While integrating the character naturally into Image 1's scene, generally follow the outfit, clothing structure, colors, accessories, hairstyle, and character design traits shown in Image 2.
-            """.trimIndent()
-        } else ""
         val watermarkDirection = buildWatermarkDirection(
             captureTime = captureTime,
             location = location,
@@ -53,7 +45,6 @@ object AiPromptBuilder {
         return """
             Edit the supplied clean camera photograph as one coherent finished photo. Preserve the input photograph's original composition and aspect ratio, and do not arbitrarily crop or reframe important people or subjects.
             Integrate Hatsune Miku naturally into the photographed scene. Preserve the real people, their identities, faces, bodies, poses, and the main composition. If people are visible, let Miku interact with them in a friendly and believable way without replacing or deforming anyone. If the photo is scenery only, blend Miku into the environment with matching perspective, scale, lighting, shadows, reflections, depth, and color.
-            ${if (referenceInstruction.isNotBlank()) "\n$referenceInstruction\n" else ""}
             $watermarkDirection
 
             User direction for this photo:

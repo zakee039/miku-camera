@@ -1,0 +1,73 @@
+{
+  "source": "E:\\project\\miku cure\\miku\\sing\\月が綺麗ねと言われたい！_E35C46C1.ogg",
+  "source_sha256": "8d3f88ed38fbd4d2e8549b287865f63308410a0c9527c96e1374c23f9e6c3a4e",
+  "duration": 50,
+  "narration": true,
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+16%",
+  "fit": [
+    {
+      "id": "home",
+      "start": 0.35,
+      "end": 3.4565625,
+      "additional_speed": 1
+    },
+    {
+      "id": "camera",
+      "start": 4.85,
+      "end": 7.8892291666666665,
+      "additional_speed": 1
+    },
+    {
+      "id": "watermark",
+      "start": 9.35,
+      "end": 13.452229166666665,
+      "additional_speed": 1
+    },
+    {
+      "id": "api",
+      "start": 14.85,
+      "end": 18.3341875,
+      "additional_speed": 1
+    },
+    {
+      "id": "settings",
+      "start": 19.85,
+      "end": 23.693208333333335,
+      "additional_speed": 1.036883116883117
+    },
+    {
+      "id": "ai",
+      "start": 24.35,
+      "end": 28.350833333333334,
+      "additional_speed": 1
+    },
+    {
+      "id": "background",
+      "start": 29.85,
+      "end": 33.584625,
+      "additional_speed": 1
+    },
+    {
+      "id": "styles",
+      "start": 34.85,
+      "end": 38.136916666666664,
+      "additional_speed": 1
+    },
+    {
+      "id": "save",
+      "start": 39.35,
+      "end": 43.68710416666667,
+      "additional_speed": 1
+    },
+    {
+      "id": "download",
+      "start": 45.35,
+      "end": 48.87195833333333,
+      "additional_speed": 1
+    }
+  ],
+  "peak": 0.7512724987353341,
+  "music_ducking_db": -11.1,
+  "fade_out": 1.3
+}

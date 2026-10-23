@@ -1,0 +1,198 @@
+{
+  "source": "E:\\project\\miku-camera\\宣传\\cover\\cover-design.html",
+  "stage": {
+    "x": 0,
+    "y": 0,
+    "width": 2560,
+    "height": 1440
+  },
+  "cssSize": [
+    2560,
+    1440
+  ],
+  "centerCrop": {
+    "x": 320,
+    "y": 0,
+    "width": 1920,
+    "height": 1440
+  },
+  "textSafety": {
+    "coordinateSpace": "stage CSS pixels",
+    "margin": 20,
+    "horizontalLimit": [
+      320,
+      2240
+    ],
+    "allTextSafe": true,
+    "textBounds": [
+      {
+        "id": "headline",
+        "text": "初音相机 Miku Camera",
+        "rangeRect": {
+          "x": 363.881591796875,
+          "y": 24.08820915222168,
+          "left": 363.881591796875,
+          "top": 24.08820915222168,
+          "right": 2000.288330078125,
+          "bottom": 362.8285655975342,
+          "width": 1636.40673828125,
+          "height": 338.7403564453125
+        },
+        "safetyMargin": 20,
+        "safeRect": {
+          "left": 343.881591796875,
+          "right": 2020.288330078125,
+          "top": 4.08820915222168,
+          "bottom": 382.8285655975342
+        },
+        "leftClearance": 23.881591796875,
+        "rightClearance": 219.711669921875,
+        "withinHorizontalCrop": true,
+        "safeForCenterCrop": true,
+        "fontFamily": "Display, sans-serif",
+        "fontSize": "202px",
+        "fontWeight": "400",
+        "fontStyle": "normal"
+      },
+      {
+        "id": "subheadline",
+        "text": "水印合影 × AI 图像创作",
+        "rangeRect": {
+          "x": 556.7456665039062,
+          "y": 332.29736328125,
+          "left": 556.7456665039062,
+          "top": 332.29736328125,
+          "right": 1587.6350708007812,
+          "bottom": 536.702880859375,
+          "width": 1030.889404296875,
+          "height": 204.405517578125
+        },
+        "safetyMargin": 20,
+        "safeRect": {
+          "left": 536.7456665039062,
+          "right": 1607.6350708007812,
+          "top": 312.29736328125,
+          "bottom": 556.702880859375
+        },
+        "leftClearance": 216.74566650390625,
+        "rightClearance": 632.3649291992188,
+        "withinHorizontalCrop": true,
+        "safeForCenterCrop": true,
+        "fontFamily": "Display, sans-serif",
+        "fontSize": "126px",
+        "fontWeight": "400",
+        "fontStyle": "normal"
+      },
+      {
+        "id": "smallprint",
+        "text": "让初音，走进你的照片",
+        "rangeRect": {
+          "x": 1063.061279296875,
+          "y": 483.6428527832031,
+          "left": 1063.061279296875,
+          "top": 483.6428527832031,
+          "right": 1490.938720703125,
+          "bottom": 583.357177734375,
+          "width": 427.87744140625,
+          "height": 99.71432495117188
+        },
+        "safetyMargin": 20,
+        "safeRect": {
+          "left": 1043.061279296875,
+          "right": 1510.938720703125,
+          "top": 463.6428527832031,
+          "bottom": 603.357177734375
+        },
+        "leftClearance": 723.061279296875,
+        "rightClearance": 729.061279296875,
+        "withinHorizontalCrop": true,
+        "safeForCenterCrop": true,
+        "fontFamily": "Display, sans-serif",
+        "fontSize": "53px",
+        "fontWeight": "400",
+        "fontStyle": "normal"
+      },
+      {
+        "id": "project-url",
+        "text": "camera.zakee.fun",
+        "rangeRect": {
+          "x": 1063,
+          "y": 1348,
+          "left": 1063,
+          "top": 1348,
+          "right": 1387.421875,
+          "bottom": 1397,
+          "width": 324.421875,
+          "height": 49
+        },
+        "safetyMargin": 20,
+        "safeRect": {
+          "left": 1043,
+          "right": 1407.421875,
+          "top": 1328,
+          "bottom": 1417
+        },
+        "leftClearance": 723,
+        "rightClearance": 832.578125,
+        "withinHorizontalCrop": true,
+        "safeForCenterCrop": true,
+        "fontFamily": "\"Microsoft YaHei\", sans-serif",
+        "fontSize": "37px",
+        "fontWeight": "700",
+        "fontStyle": "normal"
+      }
+    ]
+  },
+  "deviceScaleFactor": 1.5,
+  "sameRenderedDOM": true,
+  "jpegQuality": 95,
+  "colorProfile": "sRGB",
+  "errors": [],
+  "failedRequests": [],
+  "warnings": [],
+  "coverBackup": null,
+  "outputs": [
+    {
+      "file": "E:\\project\\miku-camera\\宣传\\cover\\miku-camera-cover-4K.png",
+      "width": 3840,
+      "height": 2160,
+      "bytes": 5600356,
+      "sha256": "6300bb202fb08f57e1a7cfd465b0d38384c5ec45626a4f60e0d05331483da355"
+    },
+    {
+      "file": "E:\\project\\miku-camera\\宣传\\cover\\miku-camera-cover-4K.jpg",
+      "width": 3840,
+      "height": 2160,
+      "bytes": 1498082,
+      "sha256": "6dff28f4cc2149dddfc58ee60a0164cf83f2c7d0890e5707f0b64a8281fa4a00"
+    },
+    {
+      "file": "E:\\project\\miku-camera\\宣传\\cover\\miku-camera-cover-1080p.jpg",
+      "width": 1920,
+      "height": 1080,
+      "bytes": 504430,
+      "sha256": "8620660771264f4e8a0bc547375576e5aa94f03bb0311ff88dc6c93292e48ec6"
+    },
+    {
+      "file": "E:\\project\\miku-camera\\宣传\\cover\\miku-camera-cover-4x3.png",
+      "width": 2880,
+      "height": 2160,
+      "bytes": 4787892,
+      "sha256": "6ee41d9b678e4d4cb921ed5af936472bea1b98fbe6f38b3c672e1ffbf0fdbe02"
+    },
+    {
+      "file": "E:\\project\\miku-camera\\宣传\\cover\\miku-camera-cover-4x3.jpg",
+      "width": 2880,
+      "height": 2160,
+      "bytes": 1364240,
+      "sha256": "7d9ea5cc6490e27d646ea2f2ede462ca1e5468bf71ef47549280498930151e2b"
+    },
+    {
+      "file": "E:\\project\\miku-camera\\宣传\\cover\\miku-camera-cover-4x3-preview.jpg",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 464989,
+      "sha256": "b27810233762955d7d8c78fdacd76e9845e118cf6d44daf59bed432ead49d075"
+    }
+  ]
+}

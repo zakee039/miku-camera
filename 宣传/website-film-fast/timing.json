@@ -1,0 +1,450 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 50,
+  "transition": 0.38,
+  "projectUrl": "https://camera.zakee.fun/",
+  "bgm": "E:/project/miku cure/miku/sing/月が綺麗ねと言われたい！_E35C46C1.ogg",
+  "narration": true,
+  "sourceHash": "7ceda1d5d20e0230fcf538236f3256196e156060aac90bbfc31b68de66096b13",
+  "scenes": [
+    {
+      "id": "home",
+      "file": "scenes/01-home.png",
+      "start": 0,
+      "end": 4.5,
+      "shots": [
+        "assets/desktop.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 476.125,
+          "y": 170,
+          "right": 830.71875,
+          "bottom": 957.984375
+        },
+        {
+          "element": "",
+          "x": 476.125,
+          "y": 965.984375,
+          "right": 830.71875,
+          "bottom": 989.984375
+        },
+        {
+          "element": "copy",
+          "x": 1034.859375,
+          "y": 297.265625,
+          "right": 1600,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "camera",
+      "file": "scenes/02-camera.png",
+      "start": 4.5,
+      "end": 9,
+      "shots": [
+        "assets/camera.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 1089.265625,
+          "y": 170,
+          "right": 1443.859375,
+          "bottom": 957.984375
+        },
+        {
+          "element": "",
+          "x": 1089.265625,
+          "y": 965.984375,
+          "right": 1443.859375,
+          "bottom": 989.984375
+        },
+        {
+          "element": "copy",
+          "x": 320,
+          "y": 297.265625,
+          "right": 885.125,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "watermark",
+      "file": "scenes/03-watermark.png",
+      "start": 9,
+      "end": 14.5,
+      "shots": [
+        "assets/presets.webp",
+        "assets/watermark.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 320,
+          "y": 204.640625,
+          "right": 643.421875,
+          "bottom": 923.34375
+        },
+        {
+          "element": "",
+          "x": 320,
+          "y": 931.34375,
+          "right": 643.421875,
+          "bottom": 955.34375
+        },
+        {
+          "element": "screenshot-frame",
+          "x": 663.421875,
+          "y": 204.640625,
+          "right": 986.84375,
+          "bottom": 923.34375
+        },
+        {
+          "element": "",
+          "x": 663.421875,
+          "y": 931.34375,
+          "right": 986.84375,
+          "bottom": 955.34375
+        },
+        {
+          "element": "copy",
+          "x": 1034.859375,
+          "y": 297.265625,
+          "right": 1600,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "api",
+      "file": "scenes/04-api.png",
+      "start": 14.5,
+      "end": 19.5,
+      "shots": [
+        "assets/api-configs.webp",
+        "assets/providers.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 933.125,
+          "y": 204.625,
+          "right": 1256.5625,
+          "bottom": 923.375
+        },
+        {
+          "element": "",
+          "x": 933.125,
+          "y": 931.375,
+          "right": 1256.5625,
+          "bottom": 955.375
+        },
+        {
+          "element": "screenshot-frame",
+          "x": 1276.5625,
+          "y": 204.625,
+          "right": 1600,
+          "bottom": 923.375
+        },
+        {
+          "element": "",
+          "x": 1276.5625,
+          "y": 931.375,
+          "right": 1600,
+          "bottom": 955.375
+        },
+        {
+          "element": "copy",
+          "x": 320,
+          "y": 297.265625,
+          "right": 885.125,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "settings",
+      "file": "scenes/05-settings.png",
+      "start": 19.5,
+      "end": 24,
+      "shots": [
+        "assets/settings.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 476.125,
+          "y": 170,
+          "right": 830.71875,
+          "bottom": 957.984375
+        },
+        {
+          "element": "",
+          "x": 476.125,
+          "y": 965.984375,
+          "right": 830.71875,
+          "bottom": 989.984375
+        },
+        {
+          "element": "copy",
+          "x": 1034.859375,
+          "y": 297.265625,
+          "right": 1600,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "ai",
+      "file": "scenes/06-ai.png",
+      "start": 24,
+      "end": 29.5,
+      "shots": [
+        "assets/prompt.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 1089.265625,
+          "y": 170,
+          "right": 1443.859375,
+          "bottom": 957.984375
+        },
+        {
+          "element": "",
+          "x": 1089.265625,
+          "y": 965.984375,
+          "right": 1443.859375,
+          "bottom": 989.984375
+        },
+        {
+          "element": "copy",
+          "x": 320,
+          "y": 297.265625,
+          "right": 885.125,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "background",
+      "file": "scenes/07-background.png",
+      "start": 29.5,
+      "end": 34.5,
+      "shots": [
+        "assets/background.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 476.125,
+          "y": 170,
+          "right": 830.71875,
+          "bottom": 957.984375
+        },
+        {
+          "element": "",
+          "x": 476.125,
+          "y": 965.984375,
+          "right": 830.71875,
+          "bottom": 989.984375
+        },
+        {
+          "element": "copy",
+          "x": 1034.859375,
+          "y": 297.265625,
+          "right": 1600,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "styles",
+      "file": "scenes/08-styles.png",
+      "start": 34.5,
+      "end": 39,
+      "shots": [
+        "assets/anime.webp",
+        "assets/real.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 933.125,
+          "y": 204.625,
+          "right": 1256.5625,
+          "bottom": 923.375
+        },
+        {
+          "element": "",
+          "x": 933.125,
+          "y": 931.375,
+          "right": 1256.5625,
+          "bottom": 955.375
+        },
+        {
+          "element": "screenshot-frame",
+          "x": 1276.5625,
+          "y": 204.625,
+          "right": 1600,
+          "bottom": 923.375
+        },
+        {
+          "element": "",
+          "x": 1276.5625,
+          "y": 931.375,
+          "right": 1600,
+          "bottom": 955.375
+        },
+        {
+          "element": "copy",
+          "x": 320,
+          "y": 297.265625,
+          "right": 885.125,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "save",
+      "file": "scenes/09-save.png",
+      "start": 39,
+      "end": 45,
+      "shots": [
+        "assets/outfit.webp",
+        "assets/real-outfit.webp"
+      ],
+      "bounds": [
+        {
+          "element": "screenshot-frame",
+          "x": 320,
+          "y": 204.640625,
+          "right": 643.421875,
+          "bottom": 923.34375
+        },
+        {
+          "element": "",
+          "x": 320,
+          "y": 931.34375,
+          "right": 643.421875,
+          "bottom": 955.34375
+        },
+        {
+          "element": "screenshot-frame",
+          "x": 663.421875,
+          "y": 204.640625,
+          "right": 986.84375,
+          "bottom": 923.34375
+        },
+        {
+          "element": "",
+          "x": 663.421875,
+          "y": 931.34375,
+          "right": 986.84375,
+          "bottom": 955.34375
+        },
+        {
+          "element": "copy",
+          "x": 1034.859375,
+          "y": 297.265625,
+          "right": 1600,
+          "bottom": 862.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    },
+    {
+      "id": "download",
+      "file": "scenes/10-download.png",
+      "start": 45,
+      "end": 50,
+      "shots": [],
+      "bounds": [
+        {
+          "element": "copy",
+          "x": 320,
+          "y": 252.265625,
+          "right": 885.125,
+          "bottom": 907.71875
+        }
+      ],
+      "buttons": 0,
+      "addresses": 2
+    }
+  ],
+  "captions": [
+    {
+      "start": 0.35,
+      "end": 3.6165625,
+      "text": "打开 Miku Camera，拍摄初音水印合影。"
+    },
+    {
+      "start": 4.85,
+      "end": 8.049229166666667,
+      "text": "取景时预览水印，时间地点一起保留。"
+    },
+    {
+      "start": 9.35,
+      "end": 13.612229166666665,
+      "text": "选择或新建预设，上传图片，自由调整水印样式。"
+    },
+    {
+      "start": 14.85,
+      "end": 18.4941875,
+      "text": "保存多套接口配置，随时切换服务和模型。"
+    },
+    {
+      "start": 19.85,
+      "end": 23.853208333333335,
+      "text": "设好默认模式、提示词和参考图，下次直接用。"
+    },
+    {
+      "start": 24.35,
+      "end": 28.510833333333334,
+      "text": "导入照片，选择形象、服装和分辨率，开始创作。"
+    },
+    {
+      "start": 29.85,
+      "end": 33.744625,
+      "text": "生成时回到桌面，悬浮窗随时查看多项任务。"
+    },
+    {
+      "start": 34.85,
+      "end": 38.29691666666666,
+      "text": "同一处风景，试试二次元和真人两种形象。"
+    },
+    {
+      "start": 39.35,
+      "end": 43.84710416666667,
+      "text": "也能换上参考造型，长按对比原图，再保存喜欢的结果。"
+    },
+    {
+      "start": 45.35,
+      "end": 49.03195833333333,
+      "text": "打开项目主页，下载 Miku Camera，开始拍摄。"
+    }
+  ],
+  "voice": "zh-CN-XiaoxiaoNeural"
+}

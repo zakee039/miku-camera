@@ -1,0 +1,11 @@
+{
+  "source": "E:\\project\\miku cure\\miku\\sing\\月が綺麗ねと言われたい！_E35C46C1.ogg",
+  "source_sha256": "8d3f88ed38fbd4d2e8549b287865f63308410a0c9527c96e1374c23f9e6c3a4e",
+  "source_duration": 146.73827664399093,
+  "output_duration": 112.0,
+  "start_seconds": 0,
+  "fade_in": 0.5,
+  "fade_out": 2.5,
+  "target_lufs": -16,
+  "narration": false
+}

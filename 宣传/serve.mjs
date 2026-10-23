@@ -1,0 +1,7 @@
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.webp':'image/webp','.png':'image/png','.jpg':'image/jpeg','.wav':'audio/wav','.mp4':'video/mp4'};
+http.createServer((req,res)=>{try{let url=decodeURIComponent(new URL(req.url,'http://localhost').pathname);if(url.endsWith('/'))url+='index.html';const p=path.resolve(root,'.'+url);const rel=path.relative(root,p);if(rel.startsWith('..')||path.isAbsolute(rel)||!fs.existsSync(p)||!fs.statSync(p).isFile()){res.writeHead(404).end();return;}const size=fs.statSync(p).size;res.setHeader('Content-Type',types[path.extname(p)]||'application/octet-stream');res.setHeader('Accept-Ranges','bytes');if(req.headers.range){const match=/bytes=(\d+)-(\d*)/.exec(req.headers.range);if(!match){res.writeHead(416).end();return;}const start=+match[1],end=match[2]?Math.min(+match[2],size-1):size-1;if(start>end||start>=size){res.writeHead(416).end();return;}res.writeHead(206,{'Content-Range':`bytes ${start}-${end}/${size}`,'Content-Length':end-start+1});fs.createReadStream(p,{start,end}).pipe(res);}else{res.setHeader('Content-Length',size);fs.createReadStream(p).pipe(res);}}catch{res.writeHead(400).end();}}).listen(5199,'127.0.0.1',()=>console.log('Website: http://127.0.0.1:5199/docs/\nFilm: http://127.0.0.1:5199/宣传/film.html'));

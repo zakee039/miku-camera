@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#39c5bb"><title>miku camera · 视频版分镜</title><meta name="description" content="Miku Camera：Android 水印相机与 AI 图像创作。了解相机拍摄、自定义水印、AI 工作流、风格设置与结果保存。"><link rel="icon" href="assets/icon.png"><link rel="stylesheet" href="site.css"><style type="text/css">
+    #track{display:block;transform:none!important;transition:none!important}
+    .slide{display:none}.slide.video-active{display:flex}
+    #viewport{cursor:default}
+    .project-address{display:inline-flex;align-items:center;justify-content:center;background:var(--green);color:white;border-radius:30px;padding:13px 24px;font-weight:700;font-size:22px;letter-spacing:.2px;white-space:nowrap}
+    .actions .project-address{font-size:27px;padding:15px 29px}
+  </style></head><body>
+<header class="header"><span class="brand"><img src="assets/icon.png" alt=""><strong>miku camera</strong></span><span class="project-address">camera.zakee.fun</span></header>
+<main id="viewport" aria-label="功能介绍，点击下一页，左右方向键切换页面"><div id="track">
+<section class="slide" id="home" aria-label="1 / 10 从桌面打开">
+  <div class="panel">
+    <div class="visual single"><figure class="shot"><div class="screenshot-frame"><img src="assets/desktop.webp" alt="桌面上的 miku camera 图标实机截图" draggable="false"></div><figcaption>桌面上的 miku camera 图标</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">MIKU CAMERA / ANDROID</div><h1>从桌面，<br><em>打开 Miku Camera</em></h1><p class="description">一款原生 Android 相机：拍摄 Miku 水印合影，也支持用 AI 将 Miku 融入照片。</p><ul class="features"><li><b>普通模式</b><span>内置 Miku 水印，打开即可拍摄。</span></li><li><b>AI 模式</b><span>从拍摄或相册选图开始，生成新的互动场景。</span></li></ul><p class="note"></p><img class="sticker" src="assets/hello.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide reverse" id="camera" aria-label="2 / 10 相机拍摄">
+  <div class="panel">
+    <div class="visual single"><figure class="shot"><div class="screenshot-frame"><img src="assets/camera.webp" alt="普通模式取景界面实机截图" draggable="false"></div><figcaption>普通模式取景界面</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">01 / CAMERA</div><h2>进入取景框，<br><em>直接预览水印</em></h2><p class="description">Miku、时间与地点显示在取景画面中。取景框与成片保持一致，支持前后镜头及横竖屏拍摄。</p><ul class="features"><li><b>对焦与曝光</b><span>点击画面对焦，调整曝光和闪光灯。</span></li><li><b>从拍摄开始</b><span>普通模式直接合成水印，AI 模式使用干净原图创作。</span></li></ul><p class="note"></p><img class="sticker" src="assets/happy.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide" id="watermark" aria-label="3 / 10 选择与编辑水印">
+  <div class="panel">
+    <div class="visual pair"><figure class="shot"><div class="screenshot-frame"><img src="assets/presets.webp" alt="选择 / 新建水印实机截图" draggable="false"></div><figcaption>选择 / 新建水印</figcaption></figure><figure class="shot"><div class="screenshot-frame"><img src="assets/watermark.webp" alt="编辑水印与显示选项实机截图" draggable="false"></div><figcaption>编辑水印与显示选项</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">02 / WATERMARK</div><h2>选择水印，<br><em>再调整它的样式</em></h2><p class="description">先从列表选择或新建预设，再上传 PNG，调整位置、旋转与描边，按需显示时间和地点。</p><ul class="features"><li><b>水印列表</b><span>新建、命名、编辑或删除，记住上次选择。</span></li><li><b>独立排版</b><span>时间与地点不随 PNG 旋转，可选择门牌显示。</span></li></ul><p class="note"></p><img class="sticker" src="assets/shy.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide reverse" id="api" aria-label="4 / 10 API 配置">
+  <div class="panel">
+    <div class="visual pair"><figure class="shot"><div class="screenshot-frame"><img src="assets/api-configs.webp" alt="选择当前 API 配置实机截图" draggable="false"></div><figcaption>选择当前 API 配置</figcaption></figure><figure class="shot"><div class="screenshot-frame"><img src="assets/providers.webp" alt="新增配置与协议选择实机截图" draggable="false"></div><figcaption>新增配置与协议选择</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">03 / API CONFIGURATION</div><h2>配置 AI 服务，<br><em>按需切换模型</em></h2><p class="description">保存多套 API 配置，选择当前使用的服务；新增时设置协议、API Key、Base URL 与图像模型。</p><ul class="features"><li><b>多套配置</b><span>在已保存的配置之间切换，也可以继续编辑。</span></li><li><b>多协议支持</b><span>OpenAI、Gemini、火山方舟、通义千问及 OpenAI 兼容接口。</span></li></ul><p class="note"></p><img class="sticker" src="assets/happy.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide" id="settings" aria-label="5 / 10 相机设置">
+  <div class="panel">
+    <div class="visual single"><figure class="shot"><div class="screenshot-frame"><img src="assets/settings.webp" alt="默认启动、提示词与参考图设置实机截图" draggable="false"></div><figcaption>默认启动、提示词与参考图设置</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">04 / CAMERA SETTINGS</div><h2>设置默认模式，<br><em>保存创作偏好</em></h2><p class="description">选择默认进入水印相机或 AI 模式，编辑默认提示词，并设置下次创作使用的参考图。</p><ul class="features"><li><b>形象参考预设</b><span>更换或清除默认参考图，提示词页可直接调用。</span></li><li><b>服务与应用</b><span>进入 API 配置，查看版本、应用说明与作者主页。</span></li></ul><p class="note"></p><img class="sticker" src="assets/flowers.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide reverse" id="ai" aria-label="6 / 10 AI 选图与提示词">
+  <div class="panel">
+    <div class="visual single"><figure class="shot"><div class="screenshot-frame"><img src="assets/prompt.webp" alt="原图、参考图与生成参数实机截图" draggable="false"></div><figcaption>原图、参考图与生成参数</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">05 / AI CREATION</div><h2>选好原图，<br><em>确认这一张的创作</em></h2><p class="description">拍摄或导入原图与参考图，编辑提示词；选择二次元或真人、服装、分辨率及时间地点水印。</p><ul class="features"><li><b>形象与服装</b><span>二次元 / 真人，公式服 / 非公式服。</span></li><li><b>生成参数</b><span>1K / 2K / 4K；确认提示词后开始生成。</span></li></ul><p class="note">AI 模式需使用你配置的 API 服务。</p><img class="sticker" src="assets/shy.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide" id="background" aria-label="7 / 10 桌面悬浮窗">
+  <div class="panel">
+    <div class="visual single"><figure class="shot"><div class="screenshot-frame"><img src="assets/background.webp" alt="桌面上的 AI 任务悬浮窗实机截图" draggable="false"></div><figcaption>桌面上的 AI 任务悬浮窗</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">06 / BACKGROUND TASKS</div><h2>回到桌面，<br><em>也能查看生成进度</em></h2><p class="description">AI 任务在后台继续处理，通过可拖动的悬浮窗跟进进度，不必一直停留在生成页面。</p><ul class="features"><li><b>同时查看多项任务</b><span>窗口列出形象、服装、分辨率与当前状态。</span></li><li><b>状态随任务更新</b><span>截图展示四项任务，包括重新提交和正在生成。</span></li></ul><p class="note"></p><img class="sticker" src="assets/happy.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide reverse" id="styles" aria-label="8 / 10 公式服生成结果">
+  <div class="panel">
+    <div class="visual pair"><figure class="shot"><div class="screenshot-frame"><img src="assets/anime.webp" alt="二次元 · 公式服实机截图" draggable="false"></div><figcaption>二次元 · 公式服</figcaption></figure><figure class="shot"><div class="screenshot-frame"><img src="assets/real.webp" alt="真人写实 · 公式服实机截图" draggable="false"></div><figcaption>真人写实 · 公式服</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">07 / CLASSIC OUTFIT</div><h2>同一处风景，<br><em>两种形象的结果</em></h2><p class="description">先看公式服的生成结果：二次元与真人写实分别融入同一张山间溪流照片。</p><ul class="features"><li><b>二次元形象</b><span>保留动漫风格，与实拍风景组合。</span></li><li><b>真人写实形象</b><span>用写实风格呈现 Miku，并生成时间地点水印。</span></li></ul><p class="note">应用内实际生成示例，效果随模型与输入变化。</p><img class="sticker" src="assets/love.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide" id="save" aria-label="9 / 10 参考造型与保存">
+  <div class="panel">
+    <div class="visual pair"><figure class="shot"><div class="screenshot-frame"><img src="assets/outfit.webp" alt="二次元 · 非公式服实机截图" draggable="false"></div><figcaption>二次元 · 非公式服</figcaption></figure><figure class="shot"><div class="screenshot-frame"><img src="assets/real-outfit.webp" alt="真人写实 · 非公式服实机截图" draggable="false"></div><figcaption>真人写实 · 非公式服</figcaption></figure></div>
+    <div class="copy"><div class="eyebrow">08 / REFERENCE OUTFIT &amp; SAVE</div><h2>再看参考造型，<br><em>对比并保存结果</em></h2><p class="description">同一组原图与参考图，继续查看非公式服的二次元、真人结果。按住图片对比原图，再决定保存内容。</p><ul class="features"><li><b>继续修改</b><span>返回修改提示词，或重新拍摄。</span></li><li><b>保存到相册</b><span>保存 AI 图、原图或两张都保留，存入 Pictures / miku camera。</span></li></ul><p class="note">应用内实际生成示例，效果随模型与输入变化。</p><img class="sticker" src="assets/flowers.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+<section class="slide reverse video-active" id="download" aria-label="10 / 10 下载应用">
+  <div class="panel">
+    <div class="visual brand-ending"><div class="app-sign"><img src="assets/icon.png" alt="miku camera 应用图标"><strong>miku camera</strong><span>水印拍摄 · AI 创作</span></div></div>
+    <div class="copy"><div class="eyebrow">09 / PROJECT</div><h2>miku camera<br><em>从第一张照片开始</em></h2><p class="description">安装 Android 版，使用普通水印相机；配置自己的 API 服务后，即可开始 AI 创作。</p><ul class="features"><li><b>普通模式在本机完成</b><span>取景、水印合成与相册保存都在设备本地处理。</span></li><li><b>开源项目</b><span>在 GitHub 查看源码与发布版本。</span></li></ul><div class="actions"><span class="project-address">camera.zakee.fun</span></div><p class="note"></p><img class="sticker" src="assets/love.webp" alt="Miku 表情贴纸" draggable="false"></div>
+  </div>
+</section>
+</div></main>
+</body></html>

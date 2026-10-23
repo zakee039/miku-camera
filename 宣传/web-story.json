@@ -1,0 +1,136 @@
+[
+  {
+    "page": 1,
+    "section": "home",
+    "title": "从桌面打开",
+    "screenshots": [
+      {
+        "asset": "desktop.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-11-33-36-950_com.miui.home.jpg",
+        "caption": "桌面上的 miku camera 图标"
+      }
+    ]
+  },
+  {
+    "page": 2,
+    "section": "camera",
+    "title": "相机拍摄",
+    "screenshots": [
+      {
+        "asset": "camera.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-11-34-06-127_com.zakee.mikucamera.jpg",
+        "caption": "普通模式取景界面"
+      }
+    ]
+  },
+  {
+    "page": 3,
+    "section": "watermark",
+    "title": "选择与编辑水印",
+    "screenshots": [
+      {
+        "asset": "presets.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-11-34-09-131_com.zakee.mikucamera.jpg",
+        "caption": "选择 / 新建水印"
+      },
+      {
+        "asset": "watermark.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-11-34-11-914_com.zakee.mikucamera.jpg",
+        "caption": "编辑水印与显示选项"
+      }
+    ]
+  },
+  {
+    "page": 4,
+    "section": "api",
+    "title": "API 配置",
+    "screenshots": [
+      {
+        "asset": "api-configs.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-11-34-24-243_com.zakee.mikucamera.jpg",
+        "caption": "选择当前 API 配置"
+      },
+      {
+        "asset": "providers.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-11-34-28-013_com.zakee.mikucamera.jpg",
+        "caption": "新增配置与协议选择"
+      }
+    ]
+  },
+  {
+    "page": 5,
+    "section": "settings",
+    "title": "相机设置",
+    "screenshots": [
+      {
+        "asset": "settings.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-12-20-52-388_com.zakee.mikucamera.jpg",
+        "caption": "默认启动、提示词与参考图设置"
+      }
+    ]
+  },
+  {
+    "page": 6,
+    "section": "ai",
+    "title": "AI 选图与提示词",
+    "screenshots": [
+      {
+        "asset": "prompt.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-12-53-40-793_com.zakee.mikucamera.jpg",
+        "caption": "原图、参考图与生成参数"
+      }
+    ]
+  },
+  {
+    "page": 7,
+    "section": "background",
+    "title": "桌面悬浮窗",
+    "screenshots": [
+      {
+        "asset": "background.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-13-12-19-111_com.miui.home.jpg",
+        "caption": "桌面上的 AI 任务悬浮窗"
+      }
+    ]
+  },
+  {
+    "page": 8,
+    "section": "styles",
+    "title": "公式服生成结果",
+    "screenshots": [
+      {
+        "asset": "anime.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-13-12-58-789_com.zakee.mikucamera.jpg",
+        "caption": "二次元 · 公式服"
+      },
+      {
+        "asset": "real.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-13-13-41-919_com.zakee.mikucamera.jpg",
+        "caption": "真人写实 · 公式服"
+      }
+    ]
+  },
+  {
+    "page": 9,
+    "section": "save",
+    "title": "参考造型与保存",
+    "screenshots": [
+      {
+        "asset": "outfit.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-13-13-48-943_com.zakee.mikucamera.jpg",
+        "caption": "二次元 · 非公式服"
+      },
+      {
+        "asset": "real-outfit.webp",
+        "source": "设计\\miku_camera_screenshot\\Screenshot_2026-10-21-13-14-22-330_com.zakee.mikucamera.jpg",
+        "caption": "真人写实 · 非公式服"
+      }
+    ]
+  },
+  {
+    "page": 10,
+    "section": "download",
+    "title": "下载应用",
+    "screenshots": []
+  }
+]

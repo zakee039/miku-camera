@@ -1,0 +1,6 @@
+assets/
+.deps/
+audio/*.wav
+audio/*.mp3
+*.mp4
+qa/
